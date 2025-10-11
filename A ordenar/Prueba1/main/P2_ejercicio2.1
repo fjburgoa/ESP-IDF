@@ -1,0 +1,107 @@
+/*
+Programa Realizado por Javier Burgoa
+Creando tareas con FreeRTOS
+*/
+
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+ 
+#define LED4 4
+#define LED6 6
+#define PULS 0
+
+volatile int state1 = 0;
+volatile int state2 = 0;
+
+void vTaskCode1( void * pvParameters )
+{
+    TickType_t 		    xLastWakeTime; 
+    const TickType_t 	xDelayTicks = 50/portTICK_PERIOD_MS;
+    BaseType_t 	     xWasDelayed;
+    
+    TickType_t ticks_T1 = 0;
+    TickType_t ticks_T0 = 0;
+
+    int i,j,k;
+
+    xLastWakeTime = xTaskGetTickCount ();         // Initialise the xLastWakeTime variable with the current time. 
+    while(1)
+    {
+       //contenido de la tarea 
+       gpio_set_level(LED4,state1);
+       state1 = !state1;
+ 
+       xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xDelayTicks );
+
+       ticks_T0 = ticks_T1;
+       ticks_T1 =  xTaskGetTickCount (); 
+
+       printf("dT-T1: %d \n", (int)((ticks_T1-ticks_T0)*portTICK_PERIOD_MS));
+
+       //vTaskDelay(50/portTICK_PERIOD_MS);  //not recommended
+    }	
+}
+
+void vTaskCode2( void * pvParameters )
+{
+
+    TickType_t ticks_T1 = 0;
+    TickType_t ticks_T0 = 0;
+
+    while(1)
+    {
+       //contenido de la tarea 
+       gpio_set_level(LED6,state2);
+       state2 = !state2;
+       vTaskDelay(200/portTICK_PERIOD_MS);  //not recommended
+
+       ticks_T0 = ticks_T1;
+       ticks_T1 =  xTaskGetTickCount (); 
+
+       printf("dT-T2: %d \n", (int)((ticks_T1-ticks_T0)*portTICK_PERIOD_MS));
+    }	
+}
+
+
+#define STACK_SIZE	2*1024	  //1kByte es el tamaño mínimo de la piLa   
+
+bool task_run_state = true;
+
+void app_main(void) 
+{   
+    gpio_set_direction(PULS,GPIO_PULLUP_ENABLE);
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED6,GPIO_MODE_OUTPUT);
+
+    TaskHandle_t xHandle1 = NULL;  //Handler a la tarea
+    TaskHandle_t xHandle2 = NULL;  //Handler a la tarea
+    int ucParameterToPass = 0;
+
+    xTaskCreate( vTaskCode1, "NAME", STACK_SIZE, &ucParameterToPass, 1, &xHandle1 );
+    xTaskCreate( vTaskCode2, "NAME", STACK_SIZE, &ucParameterToPass, 2, &xHandle2 );
+
+    int my_puls=false;
+    int my_puls_old=false;
+
+    while (1) 
+    {
+        int my_puls = gpio_get_level(PULS);
+        if ((my_puls!=my_puls_old)&&(my_puls==0))
+        {
+              task_run_state = !task_run_state;
+              if (task_run_state)
+              {
+                  vTaskResume(xHandle2);
+              }else
+              {
+                  vTaskSuspend(xHandle2);
+              }   
+        }
+
+
+        my_puls_old = my_puls;
+
+    }
+}

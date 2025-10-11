@@ -1,0 +1,37 @@
+#include <stdio.h>
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "esp_ws28xx.h"
+
+#define LED4 4
+#define LED6 6
+#define PULS 0
+
+#define LED_GPIO 48
+#define LED_NUM 10
+
+static const char *TAG = "example";
+static uint8_t led_state_off = 0;
+
+CRGB *ws2812_buffer;
+
+void app_main(void)
+{
+
+
+    ESP_ERROR_CHECK_WITHOUT_ABORT(ws28xx_init(LED_GPIO, WS2812B, 1, &ws2812_buffer));
+
+    while(1)
+    {
+        vTaskDelay(300/portTICK_PERIOD_MS);
+        *ws2812_buffer = (CRGB){.r=100, .g=0, .b=0};
+        ws28xx_update();
+
+        vTaskDelay(300/portTICK_PERIOD_MS);
+        *ws2812_buffer = (CRGB){.r=0, .g=100, .b=0};
+        ws28xx_update();
+
+    }
+}

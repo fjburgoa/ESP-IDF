@@ -1,0 +1,203 @@
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "driver/gpio.h"
+#include "esp_adc/adc_oneshot.h"
+#include "driver/ledc.h"
+#include "esp_timer.h"
+#include "driver/uart.h"
+
+//PERIODOS TAREAS en ms
+#define TASK1_T 200
+#define TASK2_T 200
+#define TASK3_T 200
+#define TASK4_T 200
+#define TASK5_T 200
+
+//CONTADORES
+#define ITER1 400000
+#define ITER2 400000
+#define ITER3 400000
+#define ITER4 400000
+#define ITER5 400000
+
+//GPIO SALIDAS Y ENTRADAS DIGITALES
+#define BOOT 0
+#define LED4 4
+#define LED6 6
+
+#define STACK_SIZE	2*1024	     //N x 1kByte es el tamaño de la piLa  
+
+//#define VERBOSE 1
+
+//----------------------------------------------------------------
+//--------------Task1--------------------------------------------- 
+//----------------------------------------------------------------
+void vTaskCode1( void * pvParameters )           
+{
+    TickType_t 		    xLastWakeTime; 
+    const TickType_t 	xDelayTicks = TASK1_T/portTICK_PERIOD_MS;
+      
+    xLastWakeTime = xTaskGetTickCount ();         // Initialise the xLastWakeTime variable with the current time. 
+    while(1)
+    {
+#ifdef VERBOSE
+       printf("\tI\t\t\t\t\t%lu\n", xTaskGetTickCount() );            
+#endif
+       //Consume CPU cycles
+       for (long i = 0; i < ITER1; i++) {
+           __asm__ __volatile__("NOP");
+       }
+
+#ifdef VERBOSE         
+       printf("\tO\t\t\t\t\t%lu\n", xTaskGetTickCount() );            
+#endif
+       //Suspende y espera hasta TASK1_T ms        
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );        
+    }	
+}
+//----------------------------------------------------------------
+//-----------------Task2 -----------------------------------------
+//----------------------------------------------------------------
+void vTaskCode2( void * pvParameters )           //
+{
+    TickType_t 		    xLastWakeTime; 
+    const TickType_t 	xDelayTicks = TASK2_T/portTICK_PERIOD_MS;
+
+    xLastWakeTime = xTaskGetTickCount ();         // Initialise the xLastWakeTime variable with the current time. 
+    while(1)
+    {
+#ifdef VERBOSE        
+       printf("\t\tI\t\t\t\t%lu\n", xTaskGetTickCount() );  
+#endif       
+       //Consume CPU cycles
+       for (long i = 0; i < ITER2; i++) {
+           __asm__ __volatile__("NOP");
+       }
+#ifdef VERBOSE
+       printf("\t\tO\t\t\t\t%lu\n", xTaskGetTickCount() );
+#endif       
+       //Suspende y espera hasta TASK2_T ms               
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );         
+    }	      
+}
+//----------------------------------------------------------------
+//-----------------Task3: ----------------------------------------
+//----------------------------------------------------------------
+void vTaskCode3( void * pvParameters )           
+{
+    TickType_t 		    xLastWakeTime; 
+    const TickType_t 	xDelayTicks = TASK3_T/portTICK_PERIOD_MS;
+      
+    xLastWakeTime = xTaskGetTickCount ();         // Initialise the xLastWakeTime variable with the current time. 
+
+    while(1)
+    {
+#ifdef VERBOSE
+       printf("\t\t\tI\t\t\t%lu\n", xTaskGetTickCount() );       
+#endif
+
+       //Consume CPU cycles
+       for (long i = 0; i < ITER3; i++) {
+           __asm__ __volatile__("NOP");
+       }
+#ifdef VERBOSE
+       printf("\t\t\tO\t\t\t%lu\n", xTaskGetTickCount() ); 
+#endif       
+       //Suspende y espera hasta TASK3_T ms        
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );             
+    }	
+}
+
+//----------------------------------------------------------------
+//-----------------Task4:   --------------------------------------
+//----------------------------------------------------------------
+void vTaskCode4( void * pvParameters )             
+{
+     TickType_t 		xLastWakeTime; 
+    const TickType_t 	xDelayTicks = TASK4_T/portTICK_PERIOD_MS;
+
+    xLastWakeTime = xTaskGetTickCount ();         // Initialise the xLastWakeTime variable with the current time. 
+    while(1)
+    {
+#ifdef VERBOSE        
+       printf("\t\t\t\tI\t\t%lu\n", xTaskGetTickCount() );
+#endif
+       //Consume CPU cycles
+       for (long i = 0; i < ITER4; i++) {
+           __asm__ __volatile__("NOP");
+       }
+#ifdef VERBOSE
+       printf("\t\t\t\tO\t\t%lu\n", xTaskGetTickCount() );
+#endif
+       //Suspende y espera hasta TASK4_T ms               
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );             
+    }
+}
+//----------------------------------------------------------------
+//-----------------Task5:   --- ----------------------------------
+//----------------------------------------------------------------
+void vTaskCode5( void * pvParameters )             
+{
+     TickType_t 		xLastWakeTime; 
+    const TickType_t 	xDelayTicks = TASK4_T/portTICK_PERIOD_MS;
+    xLastWakeTime = xTaskGetTickCount ();         // Initialise the xLastWakeTime variable with the current time. 
+    while(1)
+    {
+#ifdef VERBOSE        
+       printf("\t\t\t\t\tI\t%lu\n", xTaskGetTickCount() );                         
+#endif
+       //Consume CPU cycles
+       for (long i = 0; i < ITER4; i++) {
+           __asm__ __volatile__("NOP");
+       }
+#ifdef VERBOSE
+       printf("\t\t\t\t\tO\t%lu\n", xTaskGetTickCount() );  
+#endif       
+       //Suspende y espera hasta TASK5_T ms
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );             
+    }  
+}
+
+
+//----------------------------------------------------------------
+//-----------------Main loop    ----------------------------------
+//----------------------------------------------------------------
+void app_main(void) 
+{   
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED6,GPIO_MODE_OUTPUT);
+
+    //Crea Handlers
+    TaskHandle_t xHandle1 = NULL;  //Handler a la tarea 1
+    TaskHandle_t xHandle2 = NULL;  //Handler a la tarea 2
+    TaskHandle_t xHandle3 = NULL;  //Handler a la tarea 3 
+    TaskHandle_t xHandle4 = NULL;  //Handler a la tarea 4  
+    TaskHandle_t xHandle5 = NULL;  //Handler a la tarea 5
+
+    int ucParameterToPass1 = 0;     //dummy 
+    int ucParameterToPass2 = 0;     //dummy 
+    int ucParameterToPass3 = 0;     //dummy 
+    int ucParameterToPass4 = 0;     //dummy 
+    int ucParameterToPass5 = 0;     //dummy 
+
+    xTaskCreate( vTaskCode1, "TASK1", STACK_SIZE, &ucParameterToPass1, 2, &xHandle1 );  //Prioridad 1
+    xTaskCreate( vTaskCode2, "TASK2", STACK_SIZE, &ucParameterToPass2, 1, &xHandle2 );  //Prioridad 1 
+    xTaskCreate( vTaskCode3, "TASK3", STACK_SIZE, &ucParameterToPass3, 1, &xHandle3 );  //Prioridad 1   
+    xTaskCreate( vTaskCode4, "TASK4", STACK_SIZE, &ucParameterToPass4, 1, &xHandle4 );  //Prioridad 1   
+    xTaskCreate( vTaskCode5, "TASK5", STACK_SIZE, &ucParameterToPass5, 1, &xHandle5 );  //Prioridad 1   
+
+    while (1) 
+    {
+        //main loop  
+#ifndef VERBOSE
+        char Buff[512];
+        vTaskGetRunTimeStats(Buff);
+        printf("%s ", Buff);   
+#endif
+        vTaskDelay(1000/portTICK_PERIOD_MS);   //Wait 1 sec
+    }
+}

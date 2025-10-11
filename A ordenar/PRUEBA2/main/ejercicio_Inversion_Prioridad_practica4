@@ -1,0 +1,100 @@
+/*
+Creado por Javier Burgoa el 21/10/24
+Problema de Inversión de Prioridad
+
+*/
+
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "freertos/semphr.h"
+
+#define ITER_L   5900000      //~ 260 ms
+#define ITER_M   100000000    //~5000 mseg
+#define ITER_H   5900000      //~ 260 ms
+
+ 
+#define STACK_SIZE	2*1024	  //n x 1kByte es el tamaño de la pila  
+
+#define VERBOSE 1
+
+static SemaphoreHandle_t lock;
+
+// Settings
+TickType_t cs_wait = 250;   // Time spent in critical section (ms)
+TickType_t med_wait = 5000; // Time medium task spends working (ms)
+
+//----------------------Tarea de prioridad baja -----------------------------------------------------------
+void TaskLowPrio( void * pvParameters )
+{
+    while(1)
+    {
+#ifdef VERBOSE
+       printf("\tS\t\t\t\t\t%lu\n", xTaskGetTickCount() );            
+#endif
+       xSemaphoreTake(lock, portMAX_DELAY);
+       
+#ifdef VERBOSE
+       printf("\tI\t\t\t\t\t%lu\n", xTaskGetTickCount() );            
+#endif       
+       for (long i = 0; i < ITER_L; i++) {   __asm__ __volatile__("NOP");    }   //Consume CPU cycles
+#ifdef VERBOSE         
+       printf("\tO\t\t\t\t\t%lu\n", xTaskGetTickCount() );            
+#endif
+       xSemaphoreGive(lock);      
+       vTaskDelay(500/portTICK_PERIOD_MS);  //bloqueada 500 ms
+    }	
+}
+
+//----------------------Tarea de prioridad media -----------------------------------------------------------
+void TaskMedPrio( void * pvParameters )
+{
+    while(1)
+    {
+#ifdef VERBOSE
+       printf("\t\t\tI\t\t\t%lu\n", xTaskGetTickCount() );            
+#endif       
+       for (long i = 0; i < ITER_M; i++) {  __asm__ __volatile__("NOP");   }   //Consume CPU cycles
+#ifdef VERBOSE
+       printf("\t\t\tO\t\t\t%lu\n", xTaskGetTickCount() ); 
+#endif  
+       vTaskDelay(500/portTICK_PERIOD_MS);
+    }	
+}
+
+//----------------------Tarea de prioridad alta -----------------------------------------------------------
+void TaskHighPrio( void * pvParameters )
+{
+    while(1)
+    {
+#ifdef VERBOSE
+       printf("\t\t\t\t\tS\t%lu\n", xTaskGetTickCount() );            
+#endif
+       xSemaphoreTake(lock, portMAX_DELAY);
+#ifdef VERBOSE
+       printf("\t\t\t\t\tI\t%lu\n", xTaskGetTickCount() );       
+#endif
+       for (long i = 0; i < ITER_H; i++) {    __asm__ __volatile__("NOP");    } //Consume CPU cycles
+#ifdef VERBOSE
+       printf("\t\t\t\t\tO\t%lu\n", xTaskGetTickCount() ); 
+#endif  
+       xSemaphoreGive(lock);
+       vTaskDelay(500/portTICK_PERIOD_MS);
+    }	
+}
+//-----------------------------------------------------------------------------------------
+void app_main(void) 
+{   
+    lock = xSemaphoreCreateBinary();     //semáforo
+    xSemaphoreGive(lock);
+ 
+    xTaskCreatePinnedToCore( TaskLowPrio,  "PRIO_BAJA ", STACK_SIZE, NULL, 1, NULL,0 );  //Crea la tarea de prioridad baja0
+    vTaskDelay(1/portTICK_PERIOD_MS);
+    xTaskCreatePinnedToCore( TaskHighPrio, "PRIO_ALTA", STACK_SIZE, NULL, 3, NULL,0 );    //Crea la tarea de prioridad alta
+    xTaskCreatePinnedToCore( TaskMedPrio,  "PRIO_MEDIA", STACK_SIZE, NULL, 2, NULL,0 );   //Crea la tarea de prioridad media
+    
+    while (1) 
+    {     
+    }
+}

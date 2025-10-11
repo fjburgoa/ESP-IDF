@@ -1,0 +1,43 @@
+/*
+Programa Realizado por Javier Burgoa
+Manejo de entradas y salidas digitales
+*/
+
+#include <stdio.h>
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#define LED4 4
+#define LED6 6
+#define PULS 0
+
+int state = 0;
+
+void app_main(void)
+{
+    
+    gpio_set_direction(PULS,GPIO_PULLUP_ENABLE);
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED6,GPIO_MODE_OUTPUT);
+
+    while(1)
+    {
+        gpio_set_level(LED4,state);
+        state = !state;
+        vTaskDelay(200/portTICK_PERIOD_MS);
+        printf("Led a %d\n",state);
+
+        int my_puls = gpio_get_level(PULS);
+        if (my_puls)
+        {
+             gpio_set_level(LED6,0);             
+        }
+        else
+        { 
+             gpio_set_level(LED6,1);                 
+        }
+
+
+    }
+}

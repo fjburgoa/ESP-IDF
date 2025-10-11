@@ -1,0 +1,80 @@
+/*
+Creado por Javier Burgoa el 21/10/24
+Dos tareas coordinadas por medio de semáforos.
+*/
+
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "driver/adc.h"
+#include "freertos/semphr.h"
+ 
+#define STACK_SIZE	2*1024	  //n x 1kByte es el tamaño de la pila   
+
+SemaphoreHandle_t xSemaphore;
+
+//-----------------------------------------------------------------------------------------
+void vTaskCode1( void * pvParameters )
+{
+    unsigned long medida_adc = 0;
+    while(1)
+    {
+       #define NUM_MEDIDAS 10
+
+       medida_adc = 0; 
+       if (xSemaphoreTake(xSemaphore, portMAX_DELAY)){
+            for (int i=0;i<NUM_MEDIDAS;i++)
+                medida_adc += adc1_get_raw(ADC1_CHANNEL_4);
+            
+            medida_adc =  medida_adc/NUM_MEDIDAS;            //media
+            printf("Task1. Average %lu:\n",medida_adc);      //imprime por el terminal
+       }  
+    }	
+}
+
+//-----------------------------------------------------------------------------------------
+void vTaskCode2( void * pvParameters )
+{
+    TickType_t 		     xLastWakeTime; 
+    const TickType_t 	 xDelayTicks = 10/portTICK_PERIOD_MS;  
+    
+    xLastWakeTime = xTaskGetTickCount ();         // Initialise the xLastWakeTime variable with the current time. 
+
+    unsigned long medida_adc = 0;
+
+    while(1)
+    {
+       #define NUM_MEDIDAS_TASK2 10
+
+       medida_adc = 0;  
+       for (int i=0;i<NUM_MEDIDAS_TASK2;i++)
+            medida_adc += adc1_get_raw(ADC1_CHANNEL_4);
+       
+       medida_adc =  medida_adc/NUM_MEDIDAS_TASK2;      //media
+       printf("Task2. Average %lu:\n",medida_adc);      //imprime por el terminal    
+
+       xSemaphoreGive(xSemaphore);
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );
+    }	
+}
+//-----------------------------------------------------------------------------------------
+
+int ucParameterToPass = 0;    //dummy
+void app_main(void) 
+{   
+    xSemaphore = xSemaphoreCreateBinary();                            //semáforo
+
+    adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_12);   //Configura ADC
+    adc1_config_width(SOC_ADC_RTC_MAX_BITWIDTH);                  // Configura ADC
+
+    TaskHandle_t xHandle1 = NULL;                                 //Handler a la tarea
+    TaskHandle_t xHandle2 = NULL;                                 //Handler a la tarea
+    
+    xTaskCreate( vTaskCode1, "NAME", STACK_SIZE, &ucParameterToPass, 1, &xHandle1 );   //Crea la tarea
+    xTaskCreate( vTaskCode2, "NAME", STACK_SIZE, &ucParameterToPass, 2, &xHandle2 );   //Crea la tarea 2 con mayor prioridad
+
+    while (1) 
+    {
+    }
+}

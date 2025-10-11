@@ -1,0 +1,28 @@
+dependencies:
+  espressif/led_strip:
+    component_hash: 223998f10cae6d81f2ad2dd3c1103c2221be298c708e37917482b0153f3ec64e
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 3.0.1~1
+  idf:
+    source:
+      type: idf
+    version: 5.5.1
+  tny-robotics/sh1106-esp-idf:
+    component_hash: 7be190d7c58cd635adf8b74b3a841f8245f2f82f36d135a64d8e53cfab39124d
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.0
+direct_dependencies:
+- espressif/led_strip
+- tny-robotics/sh1106-esp-idf
+manifest_hash: 2146f1bae8c5b61443f9907e7cf00e676863741ae13c540345c4e3f5343f686c
+target: esp32s3
+version: 2.0.0

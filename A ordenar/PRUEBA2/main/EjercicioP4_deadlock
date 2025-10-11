@@ -1,0 +1,105 @@
+/*
+Creado por Javier Burgoa el 22/11/24 para simular un deadlock
+
+*/
+
+
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "driver/gpio.h"
+#include "esp_adc/adc_oneshot.h"
+#include "driver/ledc.h"
+#include "esp_timer.h"
+#include "driver/uart.h"
+
+//PERIODOS TAREAS en ms
+#define TASK_A_T 200
+#define TASK_B_T 200
+
+//CONTADORES
+#define ITER_A 400000
+#define ITER_B 400000
+
+#define STACK_SIZE	3*1024	     //N x 1kByte es el tamaño de la piLa  
+
+#define VERBOSE 1
+
+SemaphoreHandle_t xMutex1;
+SemaphoreHandle_t xMutex2;
+
+//-----------------------------------------------------------------------------------------
+void TareaA( void * pvParameters )
+{
+    TickType_t 		    xLastWakeTime; 
+    const TickType_t 	xDelayTicks = TASK_A_T/portTICK_PERIOD_MS;
+    
+    xLastWakeTime = xTaskGetTickCount ();         
+
+    while(1)
+    {
+       xSemaphoreTake(xMutex1, portMAX_DELAY);
+       printf("La tarea A ha cogido el mutex 1\n");      
+       vTaskDelay(1/portTICK_PERIOD_MS);
+            
+       xSemaphoreTake(xMutex2, portMAX_DELAY);
+       printf("La tarea A ha cogido el mutex 2\n");      
+            
+       //Consume CPU cycles
+       for (long i = 0; i < ITER_A; i++) {   __asm__ __volatile__("NOP");     }
+
+       xSemaphoreGive(xMutex2);
+       xSemaphoreGive(xMutex1);
+
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );
+    }	
+}
+
+//-----------------------------------------------------------------------------------------
+void TareaB( void * pvParameters )
+{
+    TickType_t 		    xLastWakeTime; 
+    const TickType_t 	xDelayTicks = TASK_B_T/portTICK_PERIOD_MS;
+    
+    xLastWakeTime = xTaskGetTickCount ();        
+
+    while(1)
+    {
+       xSemaphoreTake(xMutex2, portMAX_DELAY);
+       printf("La tarea B ha cogido el mutex 2\n");      
+       vTaskDelay(1/portTICK_PERIOD_MS);
+            
+       xSemaphoreTake(xMutex1, portMAX_DELAY);
+       printf("La tarea B ha cogido el mutex 1\n");      
+            
+       //Consume CPU cycles
+       for (long i = 0; i < ITER_B; i++) {   __asm__ __volatile__("NOP");     }
+
+       xSemaphoreGive(xMutex1);
+       xSemaphoreGive(xMutex2);
+
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );
+    }	
+}
+//-----------------------------------------------------------------------------------------
+
+
+void app_main(void) 
+{   
+    xMutex1 = xSemaphoreCreateMutex();                                  //mutex
+    xMutex2 = xSemaphoreCreateMutex();                                  //mutex
+ 
+    TaskHandle_t xHandle1 = NULL;                                       //Handler a la tarea A
+    TaskHandle_t xHandle2 = NULL;                                       //Handler a la tarea B
+    
+    xTaskCreate( TareaA, "TAREA_A", STACK_SIZE, NULL, 1, &xHandle1 );   //Crea la tarea
+    xTaskCreate( TareaB, "TAREA_B", STACK_SIZE, NULL, 1, &xHandle2 );   //Crea la tarea 2 con mayor prioridad
+
+    while (1) 
+    {
+    }
+}

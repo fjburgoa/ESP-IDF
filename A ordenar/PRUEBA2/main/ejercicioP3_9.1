@@ -1,0 +1,57 @@
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+//PERIODOS TAREAS en ms
+#define TASK1_T 100
+ 
+//CONTADORES
+#define ITER1 400000
+
+//GPIO SALIDAS Y ENTRADAS DIGITALES
+#define STACK_SIZE	2*1024	     //N x 1kByte es el tamaño de la piLa  
+
+//----------------------------------------------------------------
+//--------------Task1--------------------------------------------- 
+//----------------------------------------------------------------
+
+void vTaskCode1( void * pvParameters )           
+{
+    while(1)
+    {
+       char *puntero_dinamico = (char*)pvPortMalloc(10*1024*sizeof(char));
+        
+       //Consume CPU cycles
+       for (int i = 0; i < ITER1; i++) {
+          __asm__ __volatile__("NOP");
+       }
+
+       puntero_dinamico[6] = 1;
+
+       //vPortFree(puntero_dinamico);
+       printf("Remaining heap %d\n", xPortGetFreeHeapSize()); 
+       vTaskDelay( TASK1_T/portTICK_PERIOD_MS );        
+    }	
+}
+
+//----------------------------------------------------------------
+//-----------------Main loop    ----------------------------------
+//----------------------------------------------------------------
+void app_main(void) 
+{   
+    TaskHandle_t xHandle1 = NULL;  //Handler a la tarea 1
+
+    xTaskCreate( vTaskCode1, "TASK1", STACK_SIZE, NULL, 1, &xHandle1 );  //Prioridad 1
+
+    while (1) 
+    {       
+        vTaskDelay(100/portTICK_PERIOD_MS);   //Wait 1 sec
+    }
+}
+
+
+
+
+ 
+
+
+

@@ -1,0 +1,56 @@
+/*
+Programa Realizado por Javier Burgoa el 10/11/24
+Manejo de interrupciones de entradas digitales
+*/
+
+#include <stdio.h>
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#define LED4 4
+#define LED6 6
+#define PULS_ISR 0
+
+
+gpio_config_t myGPIOconfig;
+
+void ExtPinO_ISR_handler(void *args);
+
+
+void app_main(void)
+{
+    
+    //gpio_set_direction(PULS,GPIO_PULLUP_ENABLE);
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED6,GPIO_MODE_OUTPUT);
+
+    //configuramos la estructura gpio_config_t
+    myGPIOconfig.pin_bit_mask = 1ULL<< PULS_ISR;  //entrada asociada a la interrupción
+    myGPIOconfig.mode = GPIO_MODE_INPUT;          //input
+    myGPIOconfig.pull_up_en = true;               //pull-up enabled
+    myGPIOconfig.pull_down_en = false;            //pull-down disabled
+    myGPIOconfig.intr_type  = GPIO_INTR_NEGEDGE;  //Falling edge
+   
+    //registramos el pin.
+    gpio_config(&myGPIOconfig);
+    //registramos el pin.
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(PULS_ISR, ExtPinO_ISR_handler, NULL);
+
+    while(1)
+    {
+        gpio_set_level(LED4,state);
+        state = !state;
+        vTaskDelay(200/portTICK_PERIOD_MS);
+        printf("Led a %d\n",state);
+    }
+}
+//-------------ISR---------------------
+void ExtPinO_ISR_handler(void *args)
+{
+ static int my_puls = 0;
+ 
+ my_puls = !my_puls;
+ gpio_set_level(LED6,my_puls);             
+}

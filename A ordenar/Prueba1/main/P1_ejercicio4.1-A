@@ -1,0 +1,90 @@
+/*
+Programa Realizado por Javier Burgoa
+Manejo de gpTimers
+*/
+
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+
+#include "esp_log.h"
+#include "driver/gptimer.h"
+
+#define LED4 4
+#define LED6 6
+#define PULS 0
+
+
+int state_led_6 = 0;
+
+static const char *TAG = "GPTimer_Example";
+
+int cnt = 0;
+
+// Callback de interrupción del temporizador
+bool IRAM_ATTR timer_callback(gptimer_handle_t timer, const gptimer_alarm_event_data_t *event, void *user_data) 
+{
+    cnt = 1;
+    gpio_set_level(LED6,state_led_6);
+    state_led_6 = !state_led_6;
+    return true; // Return true para que el temporizador vuelva a reiniciar   
+}
+
+void app_main(void) 
+{
+
+    gpio_set_direction(PULS,GPIO_PULLUP_ENABLE);
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED6,GPIO_MODE_OUTPUT);
+
+    gptimer_handle_t gptimer = NULL;
+    
+    // Configurar el temporizador
+    gptimer_config_t timer_config = {
+        .clk_src = GPTIMER_CLK_SRC_DEFAULT,  // Reloj por defecto (APB 80 MHz)
+        .direction = GPTIMER_COUNT_UP,       // Contar hacia arriba
+        .resolution_hz = 1000000,            // 1 MHz (1us por tick)
+    };
+
+    ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &gptimer));
+
+    // Configurar la alarma (en microsegundos)
+    gptimer_alarm_config_t alarm_config = {
+        .reload_count = 0,                   // Reiniciar el contador al valor inicial
+        .alarm_count = 500000,               // 0.5 segundo
+        .flags.auto_reload_on_alarm = true,  // Auto-reload para repetir la alarma
+    };
+
+    ESP_ERROR_CHECK(gptimer_set_alarm_action(gptimer, &alarm_config));
+
+    // Registrar el callback para la interrupción
+    gptimer_event_callbacks_t cbs = {
+        .on_alarm = timer_callback,          // Configurar el callback
+    };
+    ESP_ERROR_CHECK(gptimer_register_event_callbacks(gptimer, &cbs, NULL));
+
+    // Iniciar el temporizador
+    ESP_ERROR_CHECK(gptimer_enable(gptimer));
+    ESP_ERROR_CHECK(gptimer_start(gptimer));
+
+    ESP_LOGI(TAG, "GPTimer started!");
+
+    // Mantener el sistema corriendo indefinidamente para recibir las interrupciones
+    int y=0;
+    while (1) 
+    {
+        if (cnt==1)
+        {
+            cnt = 0;
+            printf("INT %d\n",y++);
+        }
+        int my_puls = gpio_get_level(PULS);
+        if (my_puls)
+            gpio_set_level(LED4,0);             
+        else
+            gpio_set_level(LED4,1);           
+
+        
+    }
+}

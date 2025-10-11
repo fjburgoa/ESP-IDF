@@ -1,0 +1,16 @@
+{
+    "C_Cpp.intelliSenseEngine": "default",
+    "idf.espIdfPathWin": "C:\\Users\\fjbur\\esp\\v5.3.2\\esp-idf",
+    "idf.toolsPathWin": "C:\\Users\\fjbur\\esp\\tools\\",
+    "idf.openOcdConfigs": [
+        "interface/ftdi/esp32_devkitj_v1.cfg",
+        "target/esp32s3.cfg"
+    ],
+    "idf.flashType": "UART",
+    "idf.portWin": "COM8",
+    "files.associations": {
+        "esp_http_server.h": "c",
+        "protocol_examples_common.h": "c",
+        "esp_tls_crypto.h": "c"
+    }
+}

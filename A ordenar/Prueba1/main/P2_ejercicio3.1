@@ -1,0 +1,86 @@
+/*
+Creado por Javier Burgoa el 20/10/24
+Dos tareas concurrentes, una lee del ADC y otra lo procesa 
+para crear un valor promedio con las últimas 10 medidas.
+Las tareas se comunican a través de una COLA
+*/
+
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "freertos/queue.h"
+#include "driver/adc.h"
+ 
+#define STACK_SIZE	2*1024	  //1kByte es el tamaño mínimo de la piLa   
+
+volatile int state1 = 0;
+volatile int state2 = 0;
+
+QueueHandle_t HandlerCola = NULL;
+
+//-----------------------------------------------------------------------------------------
+void vTaskCode1( void * pvParameters )
+{
+    TickType_t 		    xLastWakeTime; 
+    const TickType_t 	 xDelayTicks = 200/portTICK_PERIOD_MS;
+    
+    xLastWakeTime = xTaskGetTickCount ();         // delay más avanzado 
+    while(1)
+    {
+       xTaskDelayUntil( &xLastWakeTime, xDelayTicks );
+       int medida_adc = adc1_get_raw(ADC1_CHANNEL_4);
+
+       if (!xQueueSend(HandlerCola,&medida_adc,pdMS_TO_TICKS(10)))
+         printf("Error en el envío de la cola\n");
+    }	
+}
+//-----------------------------------------------------------------------------------------
+void vTaskCode2( void * pvParameters )
+{
+    int buff[10] = {0};
+    int k = 0;
+
+    while(1)
+    {
+       vTaskDelay(100/portTICK_PERIOD_MS);  //not recommended
+
+       int valor_recibido,valor_promediado   = 0;
+       
+       while (xQueueReceive(HandlerCola, &valor_recibido,0))
+       {
+            buff[k] = valor_recibido;           //almacena el dato en el buffer
+            k++;                                //actualiza el índice del buffer de forma cíclica
+            if (k>9)
+               k= 0;
+
+            valor_promediado = 0;
+            for (int j=0; j<10; j++)
+            {
+                 valor_promediado += buff[j];   //suma todos los datos del buffer
+            }               
+
+            printf("Se ha recibido: %d. Promedio: %d\n",valor_recibido, valor_promediado/10);
+       }       
+    }	
+}
+//-----------------------------------------------------------------------------------------
+
+int ucParameterToPass = 0;    //dummy
+void app_main(void) 
+{   
+    adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_12);   //Configura ADC
+    adc1_config_width(SOC_ADC_RTC_MAX_BITWIDTH);                  // Configura ADC
+
+    TaskHandle_t xHandle1 = NULL;                                 //Handler a la tarea
+    TaskHandle_t xHandle2 = NULL;                                 //Handler a la tarea
+    
+    xTaskCreate( vTaskCode1, "NAME", STACK_SIZE, &ucParameterToPass, 1, &xHandle1 );   //Crea la tarea
+    xTaskCreate( vTaskCode2, "NAME", STACK_SIZE, &ucParameterToPass, 2, &xHandle2 );   //Crea la tarea
+    
+    HandlerCola = xQueueCreate ( 40, sizeof(uint32_t));           //Crea la cola
+
+    while (1) 
+    {
+    }
+}

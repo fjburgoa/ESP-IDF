@@ -1,0 +1,52 @@
+/*
+Programa Realizado por Javier Burgoa
+Manejo del timer de rango extendido
+*/
+
+#include <stdio.h>
+#include "driver/gpio.h"
+#include "esp_timer.h"
+
+#define LED4 4
+#define LED6 6
+#define PULS 0
+
+int state_led_4 = 0;
+int state_led_6 = 0;
+int cont  = 0;
+
+esp_timer_handle_t myTimerESP;
+
+void ESP_TimerCallback (void)
+{
+    printf("Timer1 %d\n",cont++);
+    gpio_set_level(LED6,state_led_6);
+    state_led_6 = !state_led_6;
+}
+
+void app_main(void)
+{    
+    gpio_set_direction(PULS,GPIO_PULLUP_ENABLE);
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED6,GPIO_MODE_OUTPUT);
+    
+    const esp_timer_create_args_t MyTimerESPConfig = 
+    {
+        .callback = &ESP_TimerCallback,                //callback            
+        .name = "My_Periodic"                          //name    
+    };
+
+    //configure and start timer
+    esp_timer_create(&MyTimerESPConfig, &myTimerESP);
+    esp_timer_start_periodic(myTimerESP, 500000);   //useg
+
+    while(1)
+    {
+        int my_puls = gpio_get_level(PULS);
+        if (my_puls)
+            gpio_set_level(LED4,0);             
+        else
+            gpio_set_level(LED4,1);                 
+    }
+}
+

@@ -1,0 +1,32 @@
+{
+    "C_Cpp.intelliSenseEngine": "default",
+    "idf.adapterTargetName": "esp32s3",
+    "idf.customExtraPaths": "c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\xtensa-esp-elf-gdb\\14.2_20240403\\xtensa-esp-elf-gdb\\bin;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\riscv32-esp-elf-gdb\\14.2_20240403\\riscv32-esp-elf-gdb\\bin;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\xtensa-esp-elf\\esp-13.2.0_20240530\\xtensa-esp-elf\\bin;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\riscv32-esp-elf\\esp-13.2.0_20240530\\riscv32-esp-elf\\bin;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\esp32ulp-elf\\2.38_20240113\\esp32ulp-elf\\bin;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\cmake\\3.24.0\\bin;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\openocd-esp32\\v0.12.0-esp32-20240318\\openocd-esp32\\bin;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\ninja\\1.11.1;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\idf-exe\\1.0.3;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\ccache\\4.8\\ccache-4.8-windows-x86_64;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\dfu-util\\0.11\\dfu-util-0.11-win64;c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\esp-rom-elfs\\20240305",
+    "idf.customExtraVars": {
+        "OPENOCD_SCRIPTS": "c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\openocd-esp32\\v0.12.0-esp32-20240318/openocd-esp32/share/openocd/scripts",
+        "IDF_CCACHE_ENABLE": "1",
+        "ESP_ROM_ELF_DIR": "c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\tools\\esp-rom-elfs\\20240305/"
+    },
+    "idf.espIdfPathWin": "C:\\Users\\fjbur\\esp\\v5.3.1\\esp-idf",
+    "idf.openOcdConfigs": [
+        "board/esp32s3-builtin.cfg"
+    ],
+    "idf.portWin": "COM8",
+    "idf.pythonBinPathWin": "c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",
+    "idf.toolsPathWin": "c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_IDFTools",
+    "files.associations": {
+        "gpio.h": "c",
+        "stdio.h": "c",
+        "timers.h": "c",
+        "esp_timer.h": "c",
+        "ledc.h": "c",
+        "adc.h": "c",
+        "task.h": "c",
+        "semphr.h": "c",
+        "freertos.h": "c",
+        "freertosconfig.h": "c",
+        "math.h": "c",
+        "string.h": "c"
+    },
+    "idf.flashType": "UART"
+}

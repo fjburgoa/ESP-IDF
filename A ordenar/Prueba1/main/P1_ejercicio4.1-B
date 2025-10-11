@@ -1,0 +1,49 @@
+/*
+Programa Realizado por Javier Burgoa
+Manejo del timer de FreeRTOS
+*/
+
+#include <stdio.h>
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/timers.h"
+
+#define LED4 4
+#define LED6 6
+#define PULS 0
+
+int state_led_4 = 0;
+int state_led_6 = 0;
+int cont  = 0;
+
+TimerHandle_t myTimer1;
+
+void Timer1Callback (TimerHandle_t t)
+{
+    printf("Timer1 %d\n",cont++);
+    gpio_set_level(LED6,state_led_6);
+    state_led_6 = !state_led_6;
+}
+
+void app_main(void)
+{    
+    gpio_set_direction(PULS,GPIO_PULLUP_ENABLE);
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED6,GPIO_MODE_OUTPUT);
+
+    int interval = 500/portTICK_PERIOD_MS;
+    myTimer1 = xTimerCreate("Timer1", interval, 1, 0 ,Timer1Callback);
+
+    xTimerStart(myTimer1,0);   
+
+    while(1)
+    {
+        int my_puls = gpio_get_level(PULS);
+        if (my_puls)
+            gpio_set_level(LED4,0);             
+        else
+            gpio_set_level(LED4,1);                 
+    }
+}
+
+
