@@ -17,4 +17,4 @@ set confirm off
 set confirm on
 
 # Load application symbols
-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTK/gamepad/build/bootloader/bootloader.elf
+file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKUSB/gamepad/build/bootloader/bootloader.elf

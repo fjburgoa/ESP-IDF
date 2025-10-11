@@ -1,6 +1,6 @@
 /* Automatically generated file; DO NOT EDIT */
 /* Espressif IoT Development Framework Linker Script */
-/* Generated from: C:\Users\fjbur\OneDrive\Documentos\ESP_programs\JOYSTK\gamepad\build\esp-idf\esp_system\ld\sections.ld.in */
+/* Generated from: C:\Users\fjbur\OneDrive\Documentos\ESP_programs\JOYSTKUSB\gamepad\build\esp-idf\esp_system\ld\sections.ld.in */
 
 /*
 

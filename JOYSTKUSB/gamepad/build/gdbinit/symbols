@@ -13,8 +13,8 @@ end
 
 # Load bootloader symbols
 set confirm off
-    add-symbol-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTK/gamepad/build/bootloader/bootloader.elf
+    add-symbol-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKUSB/gamepad/build/bootloader/bootloader.elf
 set confirm on
 
 # Load application symbols
-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTK/gamepad/build/gamepad.elf
+file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKUSB/gamepad/build/gamepad.elf

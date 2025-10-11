@@ -1,0 +1,413 @@
+I'd like to output information to an hyperterminal in Windows, thus, using something like Nordic UART Service – NUS, or Espressif’s UART-over-BLE
+I have this files: nus_ble_main_gpt. c
+Using nimble 5.0
+
+#include <stdio.h>
+#include <string.h>
+#include "esp_log.h"
+#include "nvs_flash.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+#include "host/ble_hs.h"
+#include "services/gap/ble_svc_gap.h"
+#include "services/gatt/ble_svc_gatt.h"
+
+static const char *TAG = "NUS_BLE";
+
+static int gap_event(struct ble_gap_event *event, void *arg);
+
+/* Nordic UART Service UUIDs */
+static const ble_uuid128_t nus_service_uuid =
+    BLE_UUID128_INIT(0x6E,0x40,0x00,0x01,0xB5,0xA3,0xF3,0x93,
+                     0xE0,0xA9,0xE5,0x0E,0x24,0xDC,0xCA,0x9E);
+
+static const ble_uuid128_t nus_rx_uuid =
+    BLE_UUID128_INIT(0x6E,0x40,0x00,0x02,0xB5,0xA3,0xF3,0x93,
+                     0xE0,0xA9,0xE5,0x0E,0x24,0xDC,0xCA,0x9E);
+
+static const ble_uuid128_t nus_tx_uuid =
+    BLE_UUID128_INIT(0x6E,0x40,0x00,0x03,0xB5,0xA3,0xF3,0x93,
+                     0xE0,0xA9,0xE5,0x0E,0x24,0xDC,0xCA,0x9E);
+
+static uint16_t nus_tx_handle;
+static uint16_t conn_handle;
+
+/* Callback when central writes to RX */
+static int nus_rx_cb(uint16_t conn_handle, uint16_t attr_handle,
+                     struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    if (ctxt->op == BLE_ATT_ACCESS_OP_WRITE) {
+        char buf[64] = {0};
+        ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf) - 1, NULL);
+        ESP_LOGI(TAG, "RX write: %s", buf);
+
+        // Echo back on TX
+        struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, strlen(buf));
+        ble_gattc_notify_custom(conn_handle, nus_tx_handle, om);
+    }
+    else if (ctxt->op == BLE_ATT_ACCESS_OP_READ) {
+        const char *msg = "Write-only characteristic";
+        os_mbuf_append(ctxt->om, msg, strlen(msg));
+    }
+    return 0;
+}
+
+/* Define GATT server */
+static const struct ble_gatt_svc_def gatt_svcs[] = {
+    {
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = &nus_service_uuid.u,
+        .characteristics = (struct ble_gatt_chr_def[]) {
+            {
+                .uuid = &nus_rx_uuid.u,
+                .access_cb = nus_rx_cb,
+                .flags = BLE_GATT_CHR_F_WRITE,
+            },
+            {
+                .uuid = &nus_tx_uuid.u,
+                .access_cb = NULL,
+                .val_handle = &nus_tx_handle,
+                .flags = BLE_GATT_CHR_F_NOTIFY,
+            },
+            { 0 } /* terminator */
+        },
+    },
+    { 0 } /* terminator */
+};
+
+/* Called when NimBLE is ready */
+static void ble_app_on_sync(void)
+{
+    uint8_t addr_type;
+    ble_hs_id_infer_auto(0, &addr_type);
+
+    uint8_t addr_val[6];
+    ble_hs_id_copy_addr(addr_type, addr_val, NULL);
+    ESP_LOGI(TAG, "Device address: %02X:%02X:%02X:%02X:%02X:%02X",
+             addr_val[5], addr_val[4], addr_val[3],
+             addr_val[2], addr_val[1], addr_val[0]);
+
+    const char *name = "ESP32S3_NUS";
+    ble_svc_gap_device_name_set(name);
+
+    struct ble_hs_adv_fields fields = {0};
+    fields.name = (uint8_t *)name;
+    fields.name_len = strlen(name);
+    fields.name_is_complete = 1;
+    fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+    ble_gap_adv_set_fields(&fields);
+
+    struct ble_gap_adv_params adv_params = {0};
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
+    adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
+
+    ble_gap_adv_start(addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event, NULL);
+
+    ESP_LOGI(TAG, "Advertising as %s", name);
+}
+
+/* GAP event handler */
+static int gap_event(struct ble_gap_event *event, void *arg)
+{
+    switch (event->type) {
+    case BLE_GAP_EVENT_CONNECT:
+        if (event->connect.status == 0) {
+            conn_handle = event->connect.conn_handle;
+            ESP_LOGI(TAG, "Connected");
+        } else {
+            ESP_LOGI(TAG, "Connection failed; restarting adv");
+            ble_app_on_sync();
+        }
+        break;
+
+    case BLE_GAP_EVENT_DISCONNECT:
+        ESP_LOGI(TAG, "Disconnected; restarting adv");
+        ble_app_on_sync();
+        break;
+
+    default:
+        break;
+    }
+    return 0;
+}
+
+//--------------------------------------------------------------------------------
+void ble_hid_device_host_task(void *param) {
+    ESP_LOGI(TAG, "BLE Host Task Started");
+    nimble_port_run();
+    nimble_port_freertos_deinit();
+}
+
+void app_main(void)
+{
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ret = nimble_port_init();
+    if (ret != ESP_OK) {
+        MODLOG_DFLT(ERROR, "Failed to init nimble %d \n", ret);
+        return;
+    }
+
+    ble_svc_gap_init();
+    ble_svc_gatt_init();
+    ble_gatts_count_cfg(gatt_svcs);
+    ble_gatts_add_svcs(gatt_svcs);
+    ble_hs_cfg.sync_cb = ble_app_on_sync;
+    nimble_port_freertos_init(ble_hid_device_host_task); 
+}
+
+
+sdkconfig:
+
+# Bluetooth
+#
+CONFIG_BT_ENABLED=y
+# CONFIG_BT_BLUEDROID_ENABLED is not set
+CONFIG_BT_NIMBLE_ENABLED=y
+# CONFIG_BT_CONTROLLER_ONLY is not set
+CONFIG_BT_CONTROLLER_ENABLED=y
+# CONFIG_BT_CONTROLLER_DISABLED is not set
+
+#
+# NimBLE Options
+#
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_INTERNAL=y
+# CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_DEFAULT is not set
+# CONFIG_BT_NIMBLE_LOG_LEVEL_NONE is not set
+# CONFIG_BT_NIMBLE_LOG_LEVEL_ERROR is not set
+# CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING is not set
+CONFIG_BT_NIMBLE_LOG_LEVEL_INFO=y
+# CONFIG_BT_NIMBLE_LOG_LEVEL_DEBUG is not set
+CONFIG_BT_NIMBLE_LOG_LEVEL=1
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
+CONFIG_BT_NIMBLE_MAX_BONDS=3
+CONFIG_BT_NIMBLE_MAX_CCCDS=8
+CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=0
+CONFIG_BT_NIMBLE_PINNED_TO_CORE_0=y
+# CONFIG_BT_NIMBLE_PINNED_TO_CORE_1 is not set
+CONFIG_BT_NIMBLE_PINNED_TO_CORE=0
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=4096
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_GATT_CLIENT=y
+CONFIG_BT_NIMBLE_GATT_SERVER=y
+# CONFIG_BT_NIMBLE_NVS_PERSIST is not set
+# CONFIG_BT_NIMBLE_SMP_ID_RESET is not set
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
+CONFIG_BT_NIMBLE_SM_LEGACY=y
+CONFIG_BT_NIMBLE_SM_SC=y
+# CONFIG_BT_NIMBLE_SM_SC_DEBUG_KEYS is not set
+CONFIG_BT_NIMBLE_LL_CFG_FEAT_LE_ENCRYPTION=y
+CONFIG_BT_NIMBLE_SM_LVL=0
+CONFIG_BT_NIMBLE_SM_SC_ONLY=0
+CONFIG_BT_NIMBLE_PRINT_ERR_NAME=y
+# CONFIG_BT_NIMBLE_DEBUG is not set
+# CONFIG_BT_NIMBLE_DYNAMIC_SERVICE is not set
+CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="JoystickBLE"
+CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN=31
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=256
+CONFIG_BT_NIMBLE_ATT_MAX_PREP_ENTRIES=64
+CONFIG_BT_NIMBLE_SVC_GAP_APPEARANCE=0
+
+#
+# Memory Settings
+#
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=12
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_SIZE=256
+CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=24
+CONFIG_BT_NIMBLE_MSYS_2_BLOCK_SIZE=320
+CONFIG_BT_NIMBLE_TRANSPORT_ACL_FROM_LL_COUNT=24
+CONFIG_BT_NIMBLE_TRANSPORT_ACL_SIZE=255
+CONFIG_BT_NIMBLE_TRANSPORT_EVT_SIZE=70
+CONFIG_BT_NIMBLE_TRANSPORT_EVT_COUNT=30
+CONFIG_BT_NIMBLE_TRANSPORT_EVT_DISCARD_COUNT=8
+CONFIG_BT_NIMBLE_L2CAP_COC_SDU_BUFF_COUNT=1
+# end of Memory Settings
+
+CONFIG_BT_NIMBLE_GATT_MAX_PROCS=4
+# CONFIG_BT_NIMBLE_HS_FLOW_CTRL is not set
+CONFIG_BT_NIMBLE_RPA_TIMEOUT=900
+# CONFIG_BT_NIMBLE_MESH is not set
+CONFIG_BT_NIMBLE_CRYPTO_STACK_MBEDTLS=y
+CONFIG_BT_NIMBLE_HS_STOP_TIMEOUT_MS=2000
+CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=y
+CONFIG_BT_NIMBLE_MAX_CONN_REATTEMPT=3
+# CONFIG_BT_NIMBLE_HANDLE_REPEAT_PAIRING_DELETION is not set
+CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT=y
+CONFIG_BT_NIMBLE_LL_CFG_FEAT_LE_2M_PHY=y
+CONFIG_BT_NIMBLE_LL_CFG_FEAT_LE_CODED_PHY=y
+# CONFIG_BT_NIMBLE_EXT_ADV is not set
+CONFIG_BT_NIMBLE_EXT_SCAN=y
+CONFIG_BT_NIMBLE_ENABLE_PERIODIC_SYNC=y
+CONFIG_BT_NIMBLE_MAX_PERIODIC_SYNCS=0
+# CONFIG_BT_NIMBLE_GATT_CACHING is not set
+# CONFIG_BT_NIMBLE_INCL_SVC_DISCOVERY is not set
+CONFIG_BT_NIMBLE_WHITELIST_SIZE=12
+# CONFIG_BT_NIMBLE_TEST_THROUGHPUT_TEST is not set
+# CONFIG_BT_NIMBLE_BLUFI_ENABLE is not set
+CONFIG_BT_NIMBLE_USE_ESP_TIMER=y
+CONFIG_BT_NIMBLE_LEGACY_VHCI_ENABLE=y
+# CONFIG_BT_NIMBLE_BLE_GATT_BLOB_TRANSFER is not set
+
+#
+# BLE Services
+#
+CONFIG_BT_NIMBLE_PROX_SERVICE=y
+CONFIG_BT_NIMBLE_ANS_SERVICE=y
+CONFIG_BT_NIMBLE_CTS_SERVICE=y
+CONFIG_BT_NIMBLE_HTP_SERVICE=y
+CONFIG_BT_NIMBLE_IPSS_SERVICE=y
+CONFIG_BT_NIMBLE_TPS_SERVICE=y
+CONFIG_BT_NIMBLE_IAS_SERVICE=y
+CONFIG_BT_NIMBLE_LLS_SERVICE=y
+CONFIG_BT_NIMBLE_SPS_SERVICE=y
+CONFIG_BT_NIMBLE_HR_SERVICE=y
+CONFIG_BT_NIMBLE_HID_SERVICE=y
+CONFIG_BT_NIMBLE_SVC_HID_MAX_INSTANCES=2
+CONFIG_BT_NIMBLE_SVC_HID_MAX_RPTS=3
+CONFIG_BT_NIMBLE_BAS_SERVICE=y
+# CONFIG_BT_NIMBLE_SVC_BAS_BATTERY_LEVEL_NOTIFY is not set
+CONFIG_BT_NIMBLE_DIS_SERVICE=y
+# CONFIG_BT_NIMBLE_SVC_DIS_MANUFACTURER_NAME is not set
+CONFIG_BT_NIMBLE_SVC_DIS_SERIAL_NUMBER=y
+# CONFIG_BT_NIMBLE_SVC_DIS_HARDWARE_REVISION is not set
+# CONFIG_BT_NIMBLE_SVC_DIS_FIRMWARE_REVISION is not set
+# CONFIG_BT_NIMBLE_SVC_DIS_SOFTWARE_REVISION is not set
+# CONFIG_BT_NIMBLE_SVC_DIS_SYSTEM_ID is not set
+# CONFIG_BT_NIMBLE_SVC_DIS_PNP_ID is not set
+# CONFIG_BT_NIMBLE_SVC_DIS_INCLUDED is not set
+CONFIG_BT_NIMBLE_GAP_SERVICE=y
+
+#
+# GAP Appearance write permissions
+#
+# CONFIG_BT_NIMBLE_SVC_GAP_APPEAR_WRITE is not set
+CONFIG_BT_NIMBLE_SVC_GAP_APPEAR_WRITE_PERM=0
+CONFIG_BT_NIMBLE_SVC_GAP_APPEAR_WRITE_PERM_ENC=0
+CONFIG_BT_NIMBLE_SVC_GAP_APPEAR_WRITE_PERM_ATHN=0
+CONFIG_BT_NIMBLE_SVC_GAP_APPEAR_WRITE_PERM_ATHR=0
+# end of GAP Appearance write permissions
+
+CONFIG_BT_NIMBLE_SVC_GAP_CAR_CHAR_NOT_SUPP=y
+# CONFIG_BT_NIMBLE_SVC_GAP_CAR_NOT_SUPP is not set
+# CONFIG_BT_NIMBLE_SVC_GAP_CAR_SUPP is not set
+CONFIG_BT_NIMBLE_SVC_GAP_CENT_ADDR_RESOLUTION=-1
+
+#
+# GAP device name write permissions
+#
+# CONFIG_BT_NIMBLE_SVC_GAP_NAME_WRITE is not set
+# end of GAP device name write permissions
+
+#
+# Peripheral Preferred Connection Parameters (PPCP) settings
+#
+CONFIG_BT_NIMBLE_SVC_GAP_PPCP_MAX_CONN_INTERVAL=0
+CONFIG_BT_NIMBLE_SVC_GAP_PPCP_MIN_CONN_INTERVAL=0
+CONFIG_BT_NIMBLE_SVC_GAP_PPCP_SLAVE_LATENCY=0
+CONFIG_BT_NIMBLE_SVC_GAP_PPCP_SUPERVISION_TMO=0
+# end of Peripheral Preferred Connection Parameters (PPCP) settings
+
+CONFIG_BT_NIMBLE_SVC_GAP_NAME_WRITE_PERM=0
+CONFIG_BT_NIMBLE_SVC_GAP_NAME_WRITE_PERM_ENC=0
+CONFIG_BT_NIMBLE_SVC_GAP_NAME_WRITE_PERM_AUTHEN=0
+CONFIG_BT_NIMBLE_SVC_GAP_NAME_WRITE_PERM_AUTHOR=0
+# CONFIG_BT_NIMBLE_SVC_GAP_GATT_SECURITY_LEVEL is not set
+# CONFIG_BT_NIMBLE_SVC_GAP_RPA_ONLY is not set
+# end of BLE Services
+
+# CONFIG_BT_NIMBLE_VS_SUPPORT is not set
+# CONFIG_BT_NIMBLE_ENC_ADV_DATA is not set
+# CONFIG_BT_NIMBLE_HIGH_DUTY_ADV_ITVL is not set
+# CONFIG_BT_NIMBLE_HOST_ALLOW_CONNECT_WITH_SCAN is not set
+# CONFIG_BT_NIMBLE_HOST_QUEUE_CONG_CHECK is not set
+# CONFIG_BT_NIMBLE_GATTC_PROC_PREEMPTION_PROTECT is not set
+# CONFIG_BT_NIMBLE_GATTC_AUTO_PAIR is not set
+
+
+But there's a problem and the device constantly reboots
+
+
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x8 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40380178
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x158c
+load:0x403c8700,len:0xd24
+load:0x403cb700,len:0x2f34
+entry 0x403c8924
+I (29) boot: ESP-IDF v5.5.1-dirty 2nd stage bootloader
+I (29) boot: compile time Sep 26 2025 14:55:07
+I (29) boot: Multicore bootloader
+I (30) boot: chip revision: v0.2
+I (33) boot: efuse block revision: v1.3
+I (36) boot.esp32s3: Boot SPI Speed : 80MHz
+I (40) boot.esp32s3: SPI Mode       : DIO
+I (44) boot.esp32s3: SPI Flash Size : 2MB
+I (48) boot: Enabling RNG early entropy source...
+I (52) boot: Partition Table:
+I (55) boot: ## Label            Usage          Type ST Offset   Length
+I (61) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (67) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (74) boot:  2 factory          factory app      00 00 00010000 00177000
+I (81) boot: End of partition table
+I (84) esp_image: segment 0: paddr=00010020 vaddr=3c060020 size=13f18h ( 81688) map
+I (106) esp_image: segment 1: paddr=00023f40 vaddr=3fc99d00 size=03f7ch ( 16252) load
+I (109) esp_image: segment 2: paddr=00027ec4 vaddr=40374000 size=08154h ( 33108) load
+I (117) esp_image: segment 3: paddr=00030020 vaddr=42000020 size=54d88h (347528) map
+I (178) esp_image: segment 4: paddr=00084db0 vaddr=4037c154 size=0dacch ( 56012) load
+I (191) esp_image: segment 5: paddr=00092884 vaddr=50000000 size=00020h (    32) load
+I (200) boot: Loaded app from partition at offset 0x10000
+I (200) boot: Disabling RNG early entropy source...
+I (210) cpu_start: Multicore app
+I (219) cpu_start: Pro cpu start user code
+I (219) cpu_start: cpu freq: 160000000 Hz
+I (219) app_init: Application information:
+I (220) app_init: Project name:     esp_hid_device
+I (224) app_init: App version:      76b42ef0-dirty
+I (228) app_init: Compile time:     Sep 26 2025 14:54:58
+I (234) app_init: ELF file SHA256:  c112437e0...
+I (238) app_init: ESP-IDF:          v5.5.1-dirty
+I (242) efuse_init: Min chip rev:     v0.0
+I (246) efuse_init: Max chip rev:     v0.99 
+I (250) efuse_init: Chip rev:         v0.2
+I (254) heap_init: Initializing. RAM available for dynamic allocation:
+I (260) heap_init: At 3FC9FE10 len 00049900 (294 KiB): RAM
+I (265) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (270) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (276) heap_init: At 600FE000 len 00001FE8 (7 KiB): RTCRAM
+I (282) spi_flash: detected chip: generic
+I (285) spi_flash: flash io: dio
+W (288) spi_flash: Detected size(8192k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
+I (300) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (306) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (313) coexist: coex firmware version: b0bcc39
+I (331) coexist: coexist rom version e7ae62f
+I (332) main_task: Started on CPU0
+I (342) main_task: Calling app_main()
+I (352) BLE_INIT: BT controller compile version [2edb0b0]
+I (352) BLE_INIT: Using main XTAL as clock source
+I (352) BLE_INIT: Feature Config, ADV:1, BLE_50:1, DTM:1, SCAN:1, CCA:0, SMP:1, CONNECT:1
+I (362) BLE_INIT: Bluetooth MAC: dc:da:0c:64:75:c6
+I (362) phy_init: phy_version 701,f4f1da3a,Mar  3 2025,15:50:10
+I (402) NUS_BLE: BLE Host Task Started
+
+assert failed: ble_hs_event_start_stage2 ble_hs.c:600 (rc == 0)
+
+
+Backtrace: 0x40380029:0x3fcae520 0x4037fff1:0x3fcae540 0x40386f05:0x3fcae560 0x4200ad1b:0x3fcae680 0x420504f7:0x3fcae6a0 0x40376ba6:0x3fcae6c0 0x4200a1ea:0x3fcae6e0 0x40380ca1:0x3fcae700

@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTK/gamepad/main
+# Install script for directory: C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKUSB/gamepad/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

@@ -91,6 +91,7 @@ static void https_with_url(void)
     esp_http_client_config_t config = {
         //.url = "https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real?start_date=2024-11-17T00:00&end_date=2024-11-17T23:59&time_trunc=hour&geo_limit=peninsular",
         .url = "https://catfact.ninja/fact",                                   //devuelve historias de gatos
+        //.url = "https://worldtimeapi.org/api/timezone/Europe/Madrid",            //hora  de Madrid
         .event_handler = _http_event_handler,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .user_data = local_response_buffer,                                    // buffer donde se guarda el cuerpo
