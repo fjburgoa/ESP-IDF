@@ -1,9 +1,14 @@
 /*
 
-Descargado del curso de youtube y modificado por mi
-Carga una página web (html) y enciende los leds de colores cuando se pulsa
+Podamos el ejemplo simple, lo podamos y lo dejamos sencillito para facilitar la comprensión.
+Servicios GET / POST
+
 
 */
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
 
 #include <esp_wifi.h>
 #include <esp_event.h>
@@ -14,200 +19,161 @@ Carga una página web (html) y enciende los leds de colores cuando se pulsa
 #include "esp_netif.h"
 #include "esp_eth.h"
 #include "protocol_examples_common.h"
+#include "protocol_examples_utils.h"
 #include <esp_https_server.h>
 #include "esp_tls.h"
-#include <string.h>
 #include "driver/gpio.h"
 #include "led_strip.h"
-#include <stdio.h>
+#include "esp_check.h"
+#include "esp_tls_crypto.h"
 
-#define ledR 33
-#define ledG 25
-#define ledB 26
 
-int8_t led_r_state = 0;
-int8_t led_g_state = 0;
-int8_t led_b_state = 0;
 
-static const char *TAG = "main";
+ 
 
-void toggle_led(int led);
 
-static led_strip_handle_t led_strip;
+#define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
 
-/* An HTTP GET handler */
-//-------------------------------------------------------------------------------
-static esp_err_t root_get_handler(httpd_req_t *req)
+static const char *TAG = "example";
+
+ 
+
+
+// Our URI handler function to be called during GET /uri request 
+esp_err_t get_handler(httpd_req_t *req)
 {
-    extern unsigned char view_start[] asm("_binary_view1_html_start");
-    extern unsigned char view_end[] asm("_binary_view1_html_end");
-    size_t view_len = view_end - view_start;
-    char viewHtml[view_len];
-    memcpy(viewHtml, view_start, view_len);
-    ESP_LOGI(TAG, "URI: %s", req->uri);
-
-    if (strcmp(req->uri, "/?led-r") == 0)
-        toggle_led(ledR);
-
-    if (strcmp(req->uri, "/?led-g") == 0)
-        toggle_led(ledG);
-
-    if (strcmp(req->uri, "/?led-b") == 0)
-        toggle_led(ledB);
-
-    char *viewHtmlUpdated;
-    int formattedStrResult = asprintf(&viewHtmlUpdated, viewHtml, led_r_state ? "ON" : "OFF", led_g_state ? "ON" : "OFF", led_b_state ? "ON" : "OFF");
-
-    httpd_resp_set_type(req, "text/html");
-
-    if (formattedStrResult > 0)
-    {
-        httpd_resp_send(req, viewHtmlUpdated, view_len);
-        free(viewHtmlUpdated);
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Error updating variables");
-        httpd_resp_send(req, viewHtml, view_len);
-    }
-
+    // Send a simple response 
+    const char resp[] = "URI GET Response";
+    httpd_resp_send(req, resp, strlen(resp));
     return ESP_OK;
 }
-//-------------------------------------------------------------------------------
-static const httpd_uri_t root = 
+
+
+
+// Our URI handler function to be called during POST /uri request 
+esp_err_t post_handler(httpd_req_t *req)
 {
-    .uri = "/",
-    .method = HTTP_GET,
-    .handler = root_get_handler
+    // Destination buffer for content of HTTP POST request.
+    // httpd_req_recv() accepts char* only, but content could
+    // as well be any binary data (needs type casting).
+    // In case of string data, null termination will be absent, and
+    // content length would give length of string 
+    char content[100];
+
+    // Truncate if content length larger than the buffer 
+    size_t recv_size = MIN(req->content_len, sizeof(content));
+
+    int ret = httpd_req_recv(req, content, recv_size);
+    if (ret <= 0) {  // 0 return value indicates connection closed 
+        // Check if timeout occurred 
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            // In case of timeout one can choose to retry calling
+            // httpd_req_recv(), but to keep it simple, here we
+            // respond with an HTTP 408 (Request Timeout) error 
+            httpd_resp_send_408(req);
+        }
+        // In case of error, returning ESP_FAIL will
+        // ensure that the underlying socket is closed 
+        return ESP_FAIL;
+    }
+
+    // Send a simple response
+    const char resp[] = "URI POST Response";
+    httpd_resp_send(req, resp, strlen(resp));
+    return ESP_OK;
+}
+
+
+httpd_uri_t uri_get = {
+    .uri       = "/get",
+    .method    = HTTP_GET,
+    .handler   = get_handler,
+    .user_ctx  = NULL
 };
-//-------------------------------------------------------------------------------
+
+httpd_uri_t uri_post = {
+    .uri       = "/post",
+    .method    = HTTP_POST,
+    .handler   = post_handler,
+    .user_ctx  = NULL
+};
+
+
+
+//-------------------------------------------------------------------------------------
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+ 
+    config.lru_purge_enable = true;
 
-    // Start the httpd server
-    ESP_LOGI(TAG, "Starting server");
-
-    httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
-    conf.transport_mode = HTTPD_SSL_TRANSPORT_INSECURE;
-    esp_err_t ret = httpd_ssl_start(&server, &conf);
-    if (ESP_OK != ret)
+    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);  // Start the httpd server
+    if (httpd_start(&server, &config) == ESP_OK) 
     {
-        ESP_LOGI(TAG, "Error starting server!");
-        return NULL;
+        // Set URI handlers
+        ESP_LOGI(TAG, "Registering URI handlers");
+        httpd_register_uri_handler(server, &uri_get);
+        httpd_register_uri_handler(server, &uri_post);
+
+        return server;
     }
+   
+    return NULL;
+}
 
-    // Set URI handlers
-    ESP_LOGI(TAG, "Registering URI handlers");
-    httpd_register_uri_handler(server, &root);
-    return server;
+
+ 
+
+
+//-------------------------------------------------------------------------------------
+static esp_err_t stop_webserver(httpd_handle_t server)
+{    
+    return httpd_stop(server); // Stop the httpd server
 }
-//-------------------------------------------------------------------------------
-static void stop_webserver(httpd_handle_t server)
+
+//-------------------------------------------------------------------------------------
+static void disconnect_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
-    httpd_ssl_stop(server);      // Stop the httpd server
-}
-//-------------------------------------------------------------------------------
-static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
-{
-    httpd_handle_t *server = (httpd_handle_t *)arg;
-    if (*server)
-    {
-        stop_webserver(*server);
-        *server = NULL;
+    httpd_handle_t* server = (httpd_handle_t*) arg;
+    if (*server) {
+        ESP_LOGI(TAG, "Stopping webserver");
+        if (stop_webserver(*server) == ESP_OK) 
+        {
+            *server = NULL;
+        } else {
+            ESP_LOGE(TAG, "Failed to stop http server");
+        }
     }
 }
-//-------------------------------------------------------------------------------
-static void connect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+
+//-------------------------------------------------------------------------------------
+static void connect_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
-    httpd_handle_t *server = (httpd_handle_t *)arg;
-    if (*server == NULL)
+    httpd_handle_t* server = (httpd_handle_t*) arg;
+    if (*server == NULL) 
     {
+        ESP_LOGI(TAG, "Starting webserver");
         *server = start_webserver();
     }
 }
- 
- 
-//-------------------------------------------------------------------------------
-void toggle_led(int led)
-{
-    switch (led)
-    {
-    case ledR:
-        led_r_state = !led_r_state;
-        led_g_state = false;
-        led_b_state = false;
-        if (led_r_state)
-            led_strip_set_pixel(led_strip, 0, 255, 0, 0);
-        else
-            led_strip_set_pixel(led_strip, 0, 0, 0, 0);                
 
-        led_strip_refresh(led_strip);
-        break;
-    case ledG:        
-        led_r_state = false;
-        led_g_state = !led_g_state;        
-        led_b_state = false;
-
-        if (led_g_state)
-            led_strip_set_pixel(led_strip, 0, 0, 255, 0);
-        else
-            led_strip_set_pixel(led_strip, 0, 0, 0, 0);
-
-        led_strip_refresh(led_strip); 
-        break;
-        
-    case ledB:
-        led_r_state = false;
-        led_g_state = false;
-        led_b_state = !led_b_state;
-
-        if (led_b_state)
-            led_strip_set_pixel(led_strip, 0, 0, 0, 255);
-        else
-            led_strip_set_pixel(led_strip, 0, 0, 0, 0);
-
-        led_strip_refresh(led_strip);
-        break;
-
-    default:
-        led_strip_clear(led_strip);
-        led_r_state = 0;
-        led_g_state = 0;
-        led_b_state = 0;
-        break;
-    }
-}
-//-------------------------------------------------------------------------------
-static void configure_led(void)
-{
-    ESP_LOGI(TAG, "Example configured to blink addressable LED!");
-    /* LED strip initialization with the GPIO and pixels number*/
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = 48,
-        .max_leds = 1, // at least one LED on board
-    };
-
-    led_strip_rmt_config_t rmt_config = {
-        .resolution_hz = 10 * 1000 * 1000, // 10MHz
-        .flags.with_dma = false,
-    };
-    led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip);
-
-    /* Set all LED off to clear all pixels */
-    led_strip_clear(led_strip);
-}
- 
-//-------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
 void app_main(void)
 {
-    configure_led();
-
     static httpd_handle_t server = NULL;
-    ESP_ERROR_CHECK(nvs_flash_init());
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
-    ESP_ERROR_CHECK(example_connect());
+
+    nvs_flash_init();                                             // inicializa la nvs, ahí está el ssid y el password
+    esp_netif_init();                                             // inicializa el stack TCP/IP
+    esp_event_loop_create_default();                              // crea un gestor de eventos 
+
+    esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server);
+    esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server);
+    example_connect();    
+    server = start_webserver();                                    // Start the server for the first time  
+
+    while (server)
+    {
+        sleep(5);
+    }
 }

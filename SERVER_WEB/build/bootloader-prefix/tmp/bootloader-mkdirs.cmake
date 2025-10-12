@@ -10,18 +10,18 @@ if(NOT EXISTS "C:/Users/fjbur/esp/v5.3.2/esp-idf/components/bootloader/subprojec
   file(MAKE_DIRECTORY "C:/Users/fjbur/esp/v5.3.2/esp-idf/components/bootloader/subproject")
 endif()
 file(MAKE_DIRECTORY
-  "C:/Users/fjbur/simple/build/bootloader"
-  "C:/Users/fjbur/simple/build/bootloader-prefix"
-  "C:/Users/fjbur/simple/build/bootloader-prefix/tmp"
-  "C:/Users/fjbur/simple/build/bootloader-prefix/src/bootloader-stamp"
-  "C:/Users/fjbur/simple/build/bootloader-prefix/src"
-  "C:/Users/fjbur/simple/build/bootloader-prefix/src/bootloader-stamp"
+  "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader"
+  "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader-prefix"
+  "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader-prefix/tmp"
+  "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader-prefix/src/bootloader-stamp"
+  "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader-prefix/src"
+  "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader-prefix/src/bootloader-stamp"
 )
 
 set(configSubDirs )
 foreach(subDir IN LISTS configSubDirs)
-    file(MAKE_DIRECTORY "C:/Users/fjbur/simple/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
+    file(MAKE_DIRECTORY "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
 endforeach()
 if(cfgdir)
-  file(MAKE_DIRECTORY "C:/Users/fjbur/simple/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
+  file(MAKE_DIRECTORY "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
 endif()

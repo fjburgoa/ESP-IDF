@@ -1,8 +1,8 @@
-# Install script for directory: C:/Users/fjbur/simple/managed_components/espressif__led_strip
+# Install script for directory: C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/managed_components/espressif__led_strip
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/simple")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/https_server")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
