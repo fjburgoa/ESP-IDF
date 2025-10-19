@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "DRAFT",
-    "project_version":    "ed58c108-dirty",
+    "project_version":    "1e9f6348-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_ADCS",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.1/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_ADCS/build",
