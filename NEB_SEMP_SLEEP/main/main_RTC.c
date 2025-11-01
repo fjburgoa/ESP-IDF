@@ -9,7 +9,8 @@
 
 
 #define BUTTON 0
-#define SLEEP_TIME_SEC 7
+#define LED4   4
+#define SLEEP_TIME_SEC 10
 
 RTC_SLOW_ATTR int32_t mi_variable_no_volatil;
  
@@ -17,7 +18,6 @@ RTC_SLOW_ATTR int32_t mi_variable_no_volatil;
 void app_main(void)
 {
 
-    
     int64_t sleep_time = esp_timer_get_time(); // µs
     printf("Tiempo de deep sleep: %lld us\n", sleep_time);
 
@@ -32,9 +32,12 @@ void app_main(void)
 
     esp_sleep_enable_timer_wakeup(SLEEP_TIME_SEC * 1000000);
 
+    gpio_set_direction(LED4,GPIO_MODE_OUTPUT);
+
 
     int btn  = 0;
     int btn1 = 0;
+    int state = 0;
 
     while(1)
     {        
@@ -47,6 +50,9 @@ void app_main(void)
         }
 
         printf("Décimas de segundo  %lu\n", mi_variable_no_volatil++);    
+        gpio_set_level(LED4,state);
+        state = !state;
+
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }

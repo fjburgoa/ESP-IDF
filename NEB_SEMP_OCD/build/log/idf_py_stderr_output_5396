@@ -1,0 +1,2 @@
+Command: ninja apptrace
+ninja: error: unknown target 'apptrace'

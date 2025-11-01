@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "deep_sleep",
-    "project_version":    "fd51534a-dirty",
+    "project_version":    "b13a88bf-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_SLEEP",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.1/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_SLEEP/build",
