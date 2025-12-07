@@ -1,7 +1,7 @@
-set(srcs #"esp_hid_joystick_main.c"
+set(srcs "esp_hid_joystick_main.c"
          #"esp_hid_mouse_main.c"
          #nus_ble_main_ds.c
-         nus_ble_main_gpt.c
+         # nus_ble_main_gpt.c
          #"esp_hid_gap.c"
          )
 set(include_dirs ".")

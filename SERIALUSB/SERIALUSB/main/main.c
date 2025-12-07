@@ -28,6 +28,7 @@ typedef struct mensaje
 struct mensaje trx_msg = {0};
 
 //callback cuando se abre/cierra la comunicación
+/*
 void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event)
 {
     int dtr = event->line_state_changed_data.dtr;
@@ -35,9 +36,9 @@ void tinyusb_cdc_line_state_changed_callback(int itf, cdcacm_event_t *event)
 
     trx_msg.itf = (uint8_t)itf;
 
-    ESP_LOGI(TAG, "Line state changed on channel %d: DTR:%d, RTS:%d", trx_msg.itf, dtr, rts);
+    ESP_LOGI(TAG, "Estado de la conexión: Activa:%d", dtr);
 }
-
+*/
 
 void app_main(void)
 {
@@ -68,7 +69,8 @@ void app_main(void)
     ESP_ERROR_CHECK(tinyusb_cdcacm_register_callback(
                         TINYUSB_CDC_ACM_0,
                         CDC_EVENT_LINE_STATE_CHANGED,
-                        &tinyusb_cdc_line_state_changed_callback));
+                        NULL));
+                        //&tinyusb_cdc_line_state_changed_callback));
 
     int k=0;    
 

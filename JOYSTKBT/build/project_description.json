@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "esp_hid_device",
-    "project_version":    "452368c6-dirty",
+    "project_version":    "ada3b354-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKBT",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.1/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKBT/build",
@@ -595,7 +595,7 @@
             "managed_reqs": [],
             "managed_priv_reqs": [],
             "file": "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKBT/build/esp-idf/main/libmain.a",
-            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKBT/main/nus_ble_main_gpt.c" ],
+            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKBT/main/esp_hid_joystick_main.c" ],
             "include_dirs": [ "." ]
         },
         "mbedtls": {
@@ -832,7 +832,7 @@
             "priv_reqs": [ "esp_driver_uart", "esp_driver_usb_serial_jtag" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "include_dirs": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKBT/build" ]
+            "include_dirs": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs2/JOYSTKBT/build" ]
         },
         "cxx": {
             "alias": "idf::cxx",
@@ -880,7 +880,7 @@
             "priv_reqs": [ "http_parser", "esp_timer", "lwip" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "include_dirs": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/JOYSTKBT/build", "esp-tls-crypto" ]
+            "include_dirs": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs2/JOYSTKBT/build", "esp-tls-crypto" ]
         },
         "esp_adc": {
             "alias": "idf::esp_adc",

@@ -225,3 +225,7 @@ _binary_view1_html_end: /* for objcopy compatibility */
 .global view1_html_length
 view1_html_length: /* not including null byte */
 .long 3286
+
+#if defined (__linux__)
+.section .note.GNU-stack,"",@progbits
+#endif

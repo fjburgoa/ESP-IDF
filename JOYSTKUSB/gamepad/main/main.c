@@ -6,7 +6,7 @@ Este ejemplo convierte un esp32s3 en un joystick con 32 botones y 6 ejes analóg
 #include <stdlib.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+//#include "freertos/task.h"
 #include "tinyusb.h"
 #include "class/hid/hid_device.h"
 #include "driver/gpio.h"
@@ -68,9 +68,9 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 void app_main(void)
 {
  
-    ESP_LOGI(TAG, "USB initialization");
+    printf("USB initialization\n");
     const tinyusb_config_t tusb_cfg = {
-        .device_descriptor = NULL,
+        .device_descriptor = "MY USB",
         .string_descriptor = hid_string_descriptor,
         .string_descriptor_count = sizeof(hid_string_descriptor) / sizeof(hid_string_descriptor[0]),
         .external_phy = false,
@@ -83,8 +83,8 @@ void app_main(void)
 #endif // TUD_OPT_HIGH_SPEED
     };
 
-    ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
-    ESP_LOGI(TAG, "USB initialization DONE");
+    tinyusb_driver_install(&tusb_cfg);
+    printf("USB initialization DONE\n");
 
     int8_t x = -100, y = 0;
     uint32_t  buttons = 0x0001; // alterna el botón 1;    

@@ -254,47 +254,17 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_phy/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/wpa_supplicant/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_coex/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_wifi/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/console/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_driver_spi/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_eth/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
   include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_driver_pcnt/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
   include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_driver_gptimer/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_driver_spi/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
@@ -380,6 +350,36 @@ endif()
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
   include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/driver/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_phy/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/wpa_supplicant/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_coex/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_wifi/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/console/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_eth/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)

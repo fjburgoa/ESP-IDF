@@ -1,35 +1,25 @@
-/*
-
-Descargado del curso de youtube y modificado por mi
-Carga una página web (html) y enciende los leds de colores cuando se pulsa
-
-*/
-
-#include <esp_wifi.h>
-#include <esp_event.h>
-#include <esp_log.h>
-#include <esp_system.h>
-#include <nvs_flash.h>
-#include <sys/param.h>
-#include "esp_netif.h"
-#include "esp_eth.h"
-#include "protocol_examples_common.h"
-#include <esp_https_server.h>
-#include "esp_tls.h"
-#include <string.h>
-#include "driver/gpio.h"
-#include "led_strip.h"
 #include <stdio.h>
+#include <sys/param.h>
+#include <nvs_flash.h>
+#include <esp_system.h>
+#include "esp_netif.h"
+#include <esp_wifi.h>
+#include <esp_https_server.h>
+#include "protocol_examples_common.h"
+#include "led_strip.h"
+#include "driver/gpio.h"
 
-#define ledR 33
-#define ledG 25
-#define ledB 26
 
+#define ledR 1
+#define ledG 2
+#define ledB 3
+
+#define LED_GPIO 48
+
+//variables que reciben la respuesta del cliente web
 int8_t led_r_state = 0;
 int8_t led_g_state = 0;
 int8_t led_b_state = 0;
-
-static const char *TAG = "main";
 
 void toggle_led(int led);
 
@@ -44,7 +34,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     size_t view_len = view_end - view_start;
     char viewHtml[view_len];
     memcpy(viewHtml, view_start, view_len);
-    ESP_LOGI(TAG, "URI: %s", req->uri);
+    printf("URI: %s", req->uri);
 
     if (strcmp(req->uri, "/?led-r") == 0)
         toggle_led(ledR);
@@ -67,7 +57,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     }
     else
     {
-        ESP_LOGE(TAG, "Error updating variables");
+        printf("Error updating variables\n");
         httpd_resp_send(req, viewHtml, view_len);
     }
 
@@ -85,20 +75,15 @@ static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
 
-    // Start the httpd server
-    ESP_LOGI(TAG, "Starting server");
-
+    // Start servidor the httpd
     httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
     conf.transport_mode = HTTPD_SSL_TRANSPORT_INSECURE;
     esp_err_t ret = httpd_ssl_start(&server, &conf);
-    if (ESP_OK != ret)
-    {
-        ESP_LOGI(TAG, "Error starting server!");
+    if (ESP_OK != ret){
+        printf("Error arrancando el servidor!\n");
         return NULL;
     }
 
-    // Set URI handlers
-    ESP_LOGI(TAG, "Registering URI handlers");
     httpd_register_uri_handler(server, &root);
     return server;
 }
@@ -118,6 +103,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t e
     }
 }
 //-------------------------------------------------------------------------------
+
 static void connect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     httpd_handle_t *server = (httpd_handle_t *)arg;
@@ -126,66 +112,45 @@ static void connect_handler(void *arg, esp_event_base_t event_base, int32_t even
         *server = start_webserver();
     }
 }
- 
+
  
 //-------------------------------------------------------------------------------
 void toggle_led(int led)
 {
+    led_strip_clear(led_strip);
     switch (led)
     {
     case ledR:
-        led_r_state = !led_r_state;
-        led_g_state = false;
-        led_b_state = false;
-        if (led_r_state)
-            led_strip_set_pixel(led_strip, 0, 255, 0, 0);
-        else
-            led_strip_set_pixel(led_strip, 0, 0, 0, 0);                
-
-        led_strip_refresh(led_strip);
+        led_strip_set_pixel(led_strip, 0, 255, 0, 0);
+        led_r_state=1;led_g_state=0;led_b_state=0;
         break;
     case ledG:        
-        led_r_state = false;
-        led_g_state = !led_g_state;        
-        led_b_state = false;
-
-        if (led_g_state)
-            led_strip_set_pixel(led_strip, 0, 0, 255, 0);
-        else
-            led_strip_set_pixel(led_strip, 0, 0, 0, 0);
-
-        led_strip_refresh(led_strip); 
+        led_strip_set_pixel(led_strip, 0, 0, 255, 0);
+        led_r_state=0;led_g_state=1;led_b_state=0;
         break;
         
     case ledB:
-        led_r_state = false;
-        led_g_state = false;
-        led_b_state = !led_b_state;
-
-        if (led_b_state)
-            led_strip_set_pixel(led_strip, 0, 0, 0, 255);
-        else
-            led_strip_set_pixel(led_strip, 0, 0, 0, 0);
-
-        led_strip_refresh(led_strip);
+        led_strip_set_pixel(led_strip, 0, 0, 0, 255);
+        led_r_state=0;led_g_state=0;led_b_state=1;
         break;
 
     default:
         led_strip_clear(led_strip);
-        led_r_state = 0;
-        led_g_state = 0;
-        led_b_state = 0;
+        led_r_state=0;led_g_state=0;led_b_state=0;
         break;
     }
+    led_strip_refresh(led_strip);
 }
 //-------------------------------------------------------------------------------
 static void configure_led(void)
 {
-    ESP_LOGI(TAG, "Example configured to blink addressable LED!");
-    /* LED strip initialization with the GPIO and pixels number*/
+    gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
+
     led_strip_config_t strip_config = {
         .strip_gpio_num = 48,
-        .max_leds = 1, // at least one LED on board
+        .led_model 	    = LED_MODEL_WS2812, // Modelo de LED
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB, // Formato RGB 
+        .max_leds       = 1, // at least one LED on board
     };
 
     led_strip_rmt_config_t rmt_config = {
@@ -204,10 +169,10 @@ void app_main(void)
     configure_led();
 
     static httpd_handle_t server = NULL;
-    ESP_ERROR_CHECK(nvs_flash_init());
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
-    ESP_ERROR_CHECK(example_connect());
+    nvs_flash_init();
+    esp_netif_init();
+    esp_event_loop_create_default();
+    esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server);
+    esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server);
+    example_connect();
 }
