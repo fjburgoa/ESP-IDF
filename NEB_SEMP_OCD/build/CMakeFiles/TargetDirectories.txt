@@ -501,6 +501,13 @@ C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/esp_a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/esp_adc/CMakeFiles/install.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/esp_adc/CMakeFiles/install/local.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/esp_adc/CMakeFiles/install/strip.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__esp-dsp/CMakeFiles/__idf_espressif__esp-dsp.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__esp-dsp/CMakeFiles/edit_cache.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__esp-dsp/CMakeFiles/rebuild_cache.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__esp-dsp/CMakeFiles/list_install_components.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__esp-dsp/CMakeFiles/install.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__esp-dsp/CMakeFiles/install/local.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__esp-dsp/CMakeFiles/install/strip.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__led_strip/CMakeFiles/__idf_espressif__led_strip.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__led_strip/CMakeFiles/edit_cache.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/NEB_SEMP_OCD/build/esp-idf/espressif__led_strip/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,4 @@
+key,type,encoding,value
+key1,namespace,,
+restart_counter,data,i32,100
+start_counter,data,i32,200

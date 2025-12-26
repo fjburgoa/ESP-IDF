@@ -147,8 +147,7 @@ MEMORY
    * Start of RTC slow memory is reserved for ULP co-processor code + data, if enabled.
 
    */
-  rtc_slow_seg(RW) : org = 0x50000000 + 512,
-                                     len = 0x2000 - 512
+  rtc_slow_seg(RW) : org = 0x50000000 , len = 0x2000
   /**
 
    * `extern_ram_seg` and `drom0_0_seg` share the same bus and the address region.

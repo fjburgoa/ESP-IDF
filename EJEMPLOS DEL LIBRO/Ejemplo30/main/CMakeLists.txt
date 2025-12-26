@@ -1,0 +1,3 @@
+idf_component_register(SRCS "Ejemplo30.c"
+                       PRIV_REQUIRES driver esp_adc
+                       INCLUDE_DIRS "")

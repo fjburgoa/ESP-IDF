@@ -70,7 +70,7 @@ void app_main(void)
  
     printf("USB initialization\n");
     const tinyusb_config_t tusb_cfg = {
-        .device_descriptor = "MY USB",
+        .device_descriptor = NULL,
         .string_descriptor = hid_string_descriptor,
         .string_descriptor_count = sizeof(hid_string_descriptor) / sizeof(hid_string_descriptor[0]),
         .external_phy = false,

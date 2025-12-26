@@ -2,11 +2,8 @@
 #include <string.h>
 #include <inttypes.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_system.h"
-#include <sys/unistd.h>
 #include "esp_err.h"
-#include "esp_log.h"
 #include "esp_spiffs.h"
 
 // --------------------------------------------------
@@ -17,18 +14,16 @@ static void copy_file2_in_file1(void)
     {
         printf("Error al abrir MiFicheroEjemplo2.txt\n");
         return;
-    }else{
+    }else
         printf("Leyendo MiFicheroEjemplo2.txt\n");    
-    }
     
     FILE* f1 = fopen("/spiffs/MiFicheroEjemplo1.txt", "a+");  
     if (f1 == NULL) 
     {
         printf("Error al abrir MiFicheroEjemplo1.txt\n");
         return;
-    }else{
+    }else
         printf("Leyendo MiFicheroEjemplo1.txt\n");
-    }
 
     char buf[1024];
     int numread = fread(buf, sizeof(char), sizeof(buf), f2);
@@ -82,9 +77,9 @@ void app_main(void)
             printf("Error al montar o formatear el sistema de ficheros \n");
         } else if (ret == ESP_ERR_NOT_FOUND) {
             printf("La partición SPIFFS no se ha encontrado \n");
-        } else {
+        } else 
             printf("Error al inicializar SPIFFS (%s)\n", esp_err_to_name(ret));
-        }
+        
         return;
     }
 
@@ -94,10 +89,9 @@ void app_main(void)
     {
        printf("Error al obtener la información de la partición SPIFFS (%s)", 
        esp_err_to_name(ret));
-    } else {
+    } else 
         printf("Tamaño de la partición: total: %d, usada: %d\n", total, used);
-    }
-    
+        
     read_file1();		// Leer fichero MiFicheroEjemplo1.txt
     copy_file2_in_file1();	// Copiar MiFicheroEjemplo2.txt a MiFicheroEjemplo1.txt
 
