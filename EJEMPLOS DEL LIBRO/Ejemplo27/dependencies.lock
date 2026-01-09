@@ -2,11 +2,11 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.1
+    version: 5.5.2
   nimble_peripheral_utils:
     dependencies: []
     source:
-      path: C:\Users\fjbur\esp\v5.5.1\esp-idf\examples\bluetooth\nimble\common\nimble_peripheral_utils
+      path: C:\Users\fjbur\esp\v5.5.2\esp-idf\examples\bluetooth\nimble\common\nimble_peripheral_utils
       type: local
     version: '*'
 direct_dependencies:

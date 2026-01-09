@@ -1,0 +1,22 @@
+menu "Configuración del ejemplo"
+
+    orsource "$IDF_PATH/examples/common_components/env_caps/$IDF_TARGET/Kconfig.env_caps"
+
+
+    choice SELECTOR
+       prompt "Selecciona"     
+       default A
+       help
+           Selecciona A,B o C en el proyecto
+
+       config SELECTOR_MODO_A
+           bool "MODO_A"
+
+       config SELECTOR_MODO_B
+           bool "MODO_B"
+
+       config SELECTOR_MODO_C
+           bool "MODO_C"
+    endchoice
+
+endmenu

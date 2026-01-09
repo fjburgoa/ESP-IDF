@@ -1,16 +1,18 @@
 Ejemplo 26 del Libro - Comunicación a través de UDP
 
 
-CREADO POR FRANCISCO JAVIER BURGOA el 15/12/2025
+CREADO POR FRANCISCO JAVIER BURGOA el 15/12/2025, Version API: 5.5.1
+Actualizado a API: 5.5.2 el 27/12/2025
 
 1 En menuconfig, actualiza SSID y PASSWORD
-2 Copia el directorio.
-3 Compila
-4 Selecciona ESP32-S3
-5 Flashea
-6 Instalar de Microsoft Store > UDP - Sender/Receiver de ReddySoftware u otro programa equivalente
-7 Toma nota de la dirección IP de tu dispositivo.
-8 Indica la dirección remota en el cliente UDP y el puerto (3333)
+2 Abrir el directorio en VSCode > Open Folder
+3 Copia el directorio.
+4 Compila
+5 Selecciona ESP32-S3
+6 Flashea
+7 Instalar de Microsoft Store > UDP - Sender/Receiver de ReddySoftware u otro programa equivalente
+8 Toma nota de la dirección IP de tu dispositivo.
+9 Indica la dirección remota en el cliente UDP y el puerto (3333)
 
 
 
