@@ -161,7 +161,7 @@ enum {
 //--------------------------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------------------------
 
-#define NDISPLAY 6    //Número de displays MAX7219C en cascada
+#define NDISPLAY 10    //Número de displays MAX7219C en cascada
 
 //--------------------------------------------------------------------
 static void max7219_send(uint8_t addr, uint8_t data)
@@ -348,8 +348,8 @@ void app_main(void)
     max7219_init();                        //Inicializa MAX7219 
 
     //Cadena de texto a mostrar
-    //char cadena[] = "1234567890 abcdefghijklmnñopqrstuvwxyz ABCDEFGHIJKLMNÑOPQRSTUVWXYZ .,:;-/_!?@ áéíóú ";
-    char cadena[] = "fjburgoa@gmail.com  .,:;-/_!?@<>€%()#    ";
+    char cadena[] = "1234567890 abcdefghijklmnñopqrstuvwxyz ABCDEFGHIJKLMNÑOPQRSTUVWXYZ .,:;-/_!?@ áéíóú ";
+    //char cadena[] = "fjburgoa@gmail.com  .,:;-/_!?@<>€%()#    ";
     //char cadena[] = "El ESP32-S3. El microcontrolador más versátil que un camión que tendré. Yúhu!   ";
     
     uint8_t *M = (uint8_t *)malloc(strlen(cadena)*8);    //reserva memoria
