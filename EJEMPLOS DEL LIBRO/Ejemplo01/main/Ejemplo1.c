@@ -18,6 +18,6 @@ void app_main(void)
         state = !state;
 
         //Delay 1 segundo = 1000ms, (frecuencia = 0,5Hz)
-	    vTaskDelay(pdMS_TO_TICKS(1000));
+	    vTaskDelay(pdMS_TO_TICKS(500));
     }
 }

@@ -16,5 +16,6 @@
     "--compile-commands-dir=c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_programs\\MOUSEUSB\\build"
   ],
   "idf.portWin": "COM4",
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.currentSetup": "C:\\Users\\fjbur\\esp\\v5.5.2\\esp-idf"
 }

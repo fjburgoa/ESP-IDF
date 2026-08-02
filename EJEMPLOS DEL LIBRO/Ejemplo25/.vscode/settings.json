@@ -13,5 +13,6 @@
         "protocol_examples_common.h": "c",
         "esp_tls_crypto.h": "c"
     },
-    "idf.pythonInstallPath": "C:\\Users\\fjbur\\esp\\tools\\tools\\idf-python\\3.11.2\\python.exe"
+    "idf.pythonInstallPath": "C:\\Users\\fjbur\\esp\\tools\\tools\\idf-python\\3.11.2\\python.exe",
+    "idf.currentSetup": "C:\\Users\\fjbur\\esp\\v5.5.2\\esp-idf"
 }

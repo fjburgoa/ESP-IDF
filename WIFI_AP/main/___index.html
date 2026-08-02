@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>ESP32-S3 Flight Display</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #0c151e;
+        color: #f4f7fa;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 24px;
+      }
+      .panel {
+        width: min(1180px, 100%);
+        background: #182838;
+        border-radius: 18px;
+        padding: 24px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      }
+      h1 {
+        margin: 0 0 18px;
+        text-align: center;
+        font-size: clamp(20px, 4vw, 30px);
+      }
+      .status {
+        text-align: center;
+        margin-bottom: 18px;
+      }
+      .connected {
+        color: #41d878;
+      }
+      .disconnected {
+        color: #ff6464;
+      }
+      .instruments-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin: 0 auto 22px;
+        align-items: start;
+      }
+      .instrument-section {
+        min-width: 0;
+        text-align: center;
+        background: #0f1c28;
+        border-radius: 14px;
+        padding: 10px 10px 16px;
+      }
+      .instrument-wrap {
+        width: min(500px, 100%);
+        margin: 0 auto;
+        aspect-ratio: 1;
+      }
+      #altimeter,
+      #variometer {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .instrument-readout {
+        margin-top: -4px;
+        color: #c5d2de;
+        font-size: 18px;
+      }
+      .instrument-readout strong {
+        color: #fff;
+        font-size: 28px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .card {
+        background: #0f1c28;
+        border-radius: 12px;
+        padding: 16px;
+        min-height: 116px;
+      }
+      .label {
+        color: #9db0c2;
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+      .value {
+        font-size: clamp(30px, 8vw, 48px);
+        font-weight: 700;
+        line-height: 1;
+      }
+      .unit {
+        color: #9db0c2;
+        font-size: 16px;
+        margin-left: 4px;
+      }
+      .qnh-card {
+        grid-column: 1/-1;
+        text-align: center;
+      }
+      .qnh-control {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 18px;
+        margin-top: 12px;
+      }
+      .qnh-button {
+        width: 64px;
+        height: 54px;
+        border: 0;
+        border-radius: 10px;
+        background: #2d88d8;
+        color: white;
+        font-size: 32px;
+        font-weight: 700;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .qnh-button:active {
+        transform: translateY(1px);
+        background: #2476bd;
+      }
+      .qnh-button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .qnh-value {
+        min-width: 190px;
+      }
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 18px;
+        color: #9db0c2;
+        font-size: 14px;
+        flex-wrap: wrap;
+      }
+      @media (max-width: 520px) {
+        body {
+          padding: 10px;
+        }
+        .panel {
+          padding: 16px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .qnh-card {
+          grid-column: auto;
+        }
+        .instruments-grid {
+          grid-template-columns: 1fr;
+        }
+        .instrument-wrap {
+          width: min(500px, 96vw);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <h1>ESP32-S3 · Telemetría dummy</h1>
+      <div class="status">
+        <span id="connection" class="disconnected">WebSocket desconectado</span>
+      </div>
+
+      <section class="instruments-grid" aria-label="Instrumentos de vuelo">
+        <article class="instrument-section" aria-label="Altímetro analógico">
+          <div class="instrument-wrap">
+            <canvas id="altimeter" width="700" height="700"></canvas>
+          </div>
+          <div class="instrument-readout">
+            Altitud indicada: <strong id="altitudeFeet">0</strong> ft
+          </div>
+        </article>
+
+        <article class="instrument-section" aria-label="Variómetro analógico">
+          <div class="instrument-wrap">
+            <canvas id="variometer" width="700" height="700"></canvas>
+          </div>
+          <div class="instrument-readout">
+            Velocidad vertical: <strong id="verticalSpeedFpm">0</strong> ft/min
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="label">Roll</div>
+          <span id="roll" class="value">0.00</span><span class="unit">°</span>
+        </article>
+        <article class="card">
+          <div class="label">Pitch</div>
+          <span id="pitch" class="value">0.00</span><span class="unit">°</span>
+        </article>
+        <article class="card">
+          <div class="label">Yaw</div>
+          <span id="yaw" class="value">0.00</span><span class="unit">°</span>
+        </article>
+        <article class="card">
+          <div class="label">Altitud</div>
+          <span id="altitude" class="value">0.00</span
+          ><span class="unit">m</span>
+        </article>
+        <article class="card">
+          <div class="label">Velocidad vertical</div>
+          <span id="verticalSpeed" class="value">0.00</span
+          ><span class="unit">m/s</span>
+        </article>
+        <article class="card">
+          <div class="label">Contador</div>
+          <span id="counter" class="value">0</span>
+        </article>
+        <article class="card qnh-card">
+          <div class="label">QNH</div>
+          <div class="qnh-control">
+            <button
+              id="qnhDown"
+              class="qnh-button"
+              type="button"
+              aria-label="Reducir QNH"
+            >
+              −
+            </button>
+            <div class="qnh-value">
+              <span id="qnh" class="value">1013.25</span
+              ><span class="unit">hPa</span>
+            </div>
+            <button
+              id="qnhUp"
+              class="qnh-button"
+              type="button"
+              aria-label="Aumentar QNH"
+            >
+              +
+            </button>
+          </div>
+        </article>
+      </section>
+      <div class="footer">
+        <span id="messageRate">0 mensajes/s</span
+        ><span id="time">t = 0.000 s</span>
+      </div>
+    </main>
+    <script>
+      "use strict";
+
+      const connectionElement = document.getElementById("connection");
+      const qnhUpButton = document.getElementById("qnhUp");
+      const qnhDownButton = document.getElementById("qnhDown");
+      const canvas = document.getElementById("altimeter");
+      const ctx = canvas.getContext("2d");
+      const variometerCanvas = document.getElementById("variometer");
+      const variometerCtx = variometerCanvas.getContext("2d");
+      const altitudeFeetElement = document.getElementById("altitudeFeet");
+      const verticalSpeedFpmElement =
+        document.getElementById("verticalSpeedFpm");
+
+      let socket = null;
+      let received = 0;
+      let displayedAltitudeFeet = 0;
+      let targetAltitudeFeet = 0;
+      let displayedVerticalSpeedFpm = 0;
+      let targetVerticalSpeedFpm = 0;
+      let lastFrameTime = performance.now();
+
+      const angleForScale = (value) => (value / 10) * Math.PI * 2 - Math.PI / 2;
+      const pointOnCircle = (cx, cy, radius, angle) => ({
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+      });
+
+      function setConnectionState(connected) {
+        connectionElement.textContent = connected
+          ? "WebSocket conectado"
+          : "WebSocket desconectado";
+        connectionElement.className = connected ? "connected" : "disconnected";
+        qnhUpButton.disabled = !connected;
+        qnhDownButton.disabled = !connected;
+      }
+
+      function drawNeedle(cx, cy, angle, length, width, longNeedle) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        const tail = longNeedle ? 26 : 18;
+        const tipWidth = width * 0.58;
+        ctx.beginPath();
+        ctx.moveTo(-tail, -width * 0.45);
+        ctx.lineTo(length - 18, -width / 2);
+        ctx.lineTo(length, -tipWidth / 2);
+        ctx.lineTo(length, tipWidth / 2);
+        ctx.lineTo(length - 18, width / 2);
+        ctx.lineTo(-tail, width * 0.45);
+        ctx.closePath();
+        const gradient = ctx.createLinearGradient(-tail, 0, length, 0);
+        gradient.addColorStop(0, "#b9bec4");
+        gradient.addColorStop(0.45, "#fff");
+        gradient.addColorStop(1, "#d5d9dd");
+        ctx.fillStyle = gradient;
+        ctx.shadowColor = "rgba(0,0,0,.8)";
+        ctx.shadowBlur = 7;
+        ctx.shadowOffsetY = 4;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#1b1e21";
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawAltimeter(altitudeFeet) {
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const outerRadius = Math.min(w, h) * 0.46;
+        const dialRadius = outerRadius * 0.87;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const bezel = ctx.createRadialGradient(
+          cx - outerRadius * 0.25,
+          cy - outerRadius * 0.28,
+          outerRadius * 0.2,
+          cx,
+          cy,
+          outerRadius,
+        );
+        bezel.addColorStop(0, "#41474d");
+        bezel.addColorStop(0.5, "#15191d");
+        bezel.addColorStop(1, "#040607");
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+        ctx.fillStyle = bezel;
+        ctx.shadowColor = "rgba(0,0,0,.7)";
+        ctx.shadowBlur = 25;
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerRadius * 0.94, 0, Math.PI * 2);
+        ctx.fillStyle = "#050708";
+        ctx.fill();
+
+        const face = ctx.createRadialGradient(
+          cx - 80,
+          cy - 90,
+          10,
+          cx,
+          cy,
+          dialRadius,
+        );
+        face.addColorStop(0, "#282b2e");
+        face.addColorStop(1, "#101214");
+        ctx.beginPath();
+        ctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
+        ctx.fillStyle = face;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#4d5358";
+        ctx.stroke();
+
+        for (let i = 0; i < 100; i++) {
+          const angle = (i / 100) * Math.PI * 2 - Math.PI / 2;
+          const major = i % 10 === 0;
+          const medium = i % 5 === 0;
+          const outer = dialRadius * 0.95;
+          const inner = major
+            ? dialRadius * 0.83
+            : medium
+              ? dialRadius * 0.865
+              : dialRadius * 0.89;
+          const p1 = pointOnCircle(cx, cy, inner, angle);
+          const p2 = pointOnCircle(cx, cy, outer, angle);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.strokeStyle = "#f5f5f5";
+          ctx.lineWidth = major ? 7 : medium ? 4 : 2.3;
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "#f3f3f3";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "58px Arial";
+        for (let n = 0; n <= 9; n++) {
+          const p = pointOnCircle(cx, cy, dialRadius * 0.7, angleForScale(n));
+          ctx.fillText(String(n), p.x, p.y);
+        }
+
+        ctx.font = "48px Arial";
+        ctx.fillText("ALT", cx, cy - 72);
+
+        ctx.font = "26px Arial";
+        ctx.fillStyle = "#f3f3f3";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.fillText("x 1000 ft", cx, cy + dialRadius * 0.3);
+
+        const triangleY = cy - dialRadius * 0.92;
+        ctx.beginPath();
+        ctx.moveTo(cx, triangleY + 34);
+        ctx.lineTo(cx - 24, triangleY);
+        ctx.lineTo(cx + 24, triangleY);
+        ctx.closePath();
+        ctx.fillStyle = "#f5f5f5";
+        ctx.fill();
+
+        const hundreds = (altitudeFeet % 1000) / 100;
+        const thousands = (altitudeFeet % 10000) / 1000;
+
+        drawNeedle(
+          cx,
+          cy,
+          angleForScale(thousands),
+          dialRadius * 0.55,
+          23,
+          false,
+        );
+        drawNeedle(
+          cx,
+          cy,
+          angleForScale(hundreds),
+          dialRadius * 0.82,
+          23,
+          true,
+        );
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 27, 0, Math.PI * 2);
+        const hub = ctx.createRadialGradient(cx - 8, cy - 8, 3, cx, cy, 27);
+        hub.addColorStop(0, "#70767c");
+        hub.addColorStop(0.45, "#2b2f33");
+        hub.addColorStop(1, "#090b0d");
+        ctx.fillStyle = hub;
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#070809";
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.fillStyle = "#0c0e10";
+        ctx.fill();
+      }
+
+      function variometerAngle(verticalSpeedFpm) {
+        const limited = Math.max(-2000, Math.min(2000, verticalSpeedFpm));
+        return Math.PI + (limited / 2000) * Math.PI;
+      }
+
+      function drawVariometerNeedle(cx, cy, angle, length, width) {
+        const vctx = variometerCtx;
+        vctx.save();
+        vctx.translate(cx, cy);
+        vctx.rotate(angle);
+
+        vctx.beginPath();
+        vctx.moveTo(-34, -width * 0.42);
+        vctx.lineTo(length - 18, -width / 2);
+        vctx.lineTo(length, 0);
+        vctx.lineTo(length - 18, width / 2);
+        vctx.lineTo(-34, width * 0.42);
+        vctx.closePath();
+
+        const gradient = vctx.createLinearGradient(-34, 0, length, 0);
+        gradient.addColorStop(0, "#b9bec4");
+        gradient.addColorStop(0.45, "#ffffff");
+        gradient.addColorStop(1, "#d5d9dd");
+        vctx.fillStyle = gradient;
+        vctx.shadowColor = "rgba(0,0,0,.8)";
+        vctx.shadowBlur = 7;
+        vctx.shadowOffsetY = 4;
+        vctx.fill();
+        vctx.lineWidth = 2;
+        vctx.strokeStyle = "#1b1e21";
+        vctx.stroke();
+        vctx.restore();
+      }
+
+      function drawVariometer(verticalSpeedFpm) {
+        const vctx = variometerCtx;
+        const w = variometerCanvas.width;
+        const h = variometerCanvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const outerRadius = Math.min(w, h) * 0.46;
+        const dialRadius = outerRadius * 0.87;
+
+        vctx.clearRect(0, 0, w, h);
+
+        const bezel = vctx.createRadialGradient(
+          cx - outerRadius * 0.25,
+          cy - outerRadius * 0.28,
+          outerRadius * 0.2,
+          cx,
+          cy,
+          outerRadius,
+        );
+        bezel.addColorStop(0, "#41474d");
+        bezel.addColorStop(0.5, "#15191d");
+        bezel.addColorStop(1, "#040607");
+        vctx.beginPath();
+        vctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+        vctx.fillStyle = bezel;
+        vctx.shadowColor = "rgba(0,0,0,.7)";
+        vctx.shadowBlur = 25;
+        vctx.fill();
+
+        vctx.shadowBlur = 0;
+        vctx.beginPath();
+        vctx.arc(cx, cy, outerRadius * 0.94, 0, Math.PI * 2);
+        vctx.fillStyle = "#050708";
+        vctx.fill();
+
+        const face = vctx.createRadialGradient(
+          cx - 80,
+          cy - 90,
+          10,
+          cx,
+          cy,
+          dialRadius,
+        );
+        face.addColorStop(0, "#282b2e");
+        face.addColorStop(1, "#101214");
+        vctx.beginPath();
+        vctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
+        vctx.fillStyle = face;
+        vctx.fill();
+        vctx.lineWidth = 3;
+        vctx.strokeStyle = "#4d5358";
+        vctx.stroke();
+
+        /* 80 divisiones: 0..+20 por arriba y 0..-20 por abajo. */
+        for (let i = 0; i < 80; i++) {
+          const angle = Math.PI + (i / 80) * Math.PI * 2;
+          const major = i % 10 === 0;
+          const medium = i % 5 === 0;
+          const outer = dialRadius * 0.95;
+          const inner = major
+            ? dialRadius * 0.82
+            : medium
+              ? dialRadius * 0.86
+              : dialRadius * 0.89;
+          const p1 = pointOnCircle(cx, cy, inner, angle);
+          const p2 = pointOnCircle(cx, cy, outer, angle);
+          vctx.beginPath();
+          vctx.moveTo(p1.x, p1.y);
+          vctx.lineTo(p2.x, p2.y);
+          vctx.strokeStyle = "#f5f5f5";
+          vctx.lineWidth = major ? 7 : medium ? 4 : 2.3;
+          vctx.stroke();
+        }
+
+        vctx.fillStyle = "#f3f3f3";
+        vctx.textAlign = "center";
+        vctx.textBaseline = "middle";
+        vctx.font = "48px Arial";
+
+        const labels = [
+          { value: 0, text: "0" },
+          { value: 500, text: "5" },
+          { value: 1000, text: "10" },
+          { value: 1500, text: "15" },
+          { value: 2000, text: "20" },
+          { value: -500, text: "5" },
+          { value: -1000, text: "10" },
+          { value: -1500, text: "15" },
+        ];
+
+        for (const label of labels) {
+          const p = pointOnCircle(
+            cx,
+            cy,
+            dialRadius * 0.69,
+            variometerAngle(label.value),
+          );
+          vctx.fillText(label.text, p.x, p.y);
+        }
+
+        vctx.font = "34px Arial";
+        vctx.fillText("VERTICAL", cx, cy - 82);
+        vctx.fillText("SPEED", cx, cy - 43);
+        vctx.font = "22px Arial";
+        vctx.fillText("x 100 ft/min", cx, cy + dialRadius * 0.35);
+
+        vctx.font = "22px Arial";
+        vctx.textAlign = "left";
+        vctx.fillText("UP", cx - dialRadius * 0.49, cy - 56);
+        vctx.fillText("DOWN", cx - dialRadius * 0.49, cy + 58);
+
+        vctx.strokeStyle = "#f3f3f3";
+        vctx.fillStyle = "#f3f3f3";
+        vctx.lineWidth = 4;
+        const arrowX = cx - dialRadius * 0.58;
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy - 18);
+        vctx.lineTo(arrowX, cy - 70);
+        vctx.stroke();
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy - 78);
+        vctx.lineTo(arrowX - 9, cy - 59);
+        vctx.lineTo(arrowX + 9, cy - 59);
+        vctx.closePath();
+        vctx.fill();
+
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy + 18);
+        vctx.lineTo(arrowX, cy + 70);
+        vctx.stroke();
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy + 78);
+        vctx.lineTo(arrowX - 9, cy + 59);
+        vctx.lineTo(arrowX + 9, cy + 59);
+        vctx.closePath();
+        vctx.fill();
+
+        drawVariometerNeedle(
+          cx,
+          cy,
+          variometerAngle(verticalSpeedFpm),
+          dialRadius * 0.78,
+          18,
+        );
+
+        vctx.beginPath();
+        vctx.arc(cx, cy, 27, 0, Math.PI * 2);
+        const hub = vctx.createRadialGradient(cx - 8, cy - 8, 3, cx, cy, 27);
+        hub.addColorStop(0, "#70767c");
+        hub.addColorStop(0.45, "#2b2f33");
+        hub.addColorStop(1, "#090b0d");
+        vctx.fillStyle = hub;
+        vctx.fill();
+        vctx.lineWidth = 4;
+        vctx.strokeStyle = "#070809";
+        vctx.stroke();
+        vctx.beginPath();
+        vctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        vctx.fillStyle = "#0c0e10";
+        vctx.fill();
+      }
+
+      function animateAltimeter(now) {
+        const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+        lastFrameTime = now;
+        const alpha = 1 - Math.exp(-8 * dt);
+        displayedAltitudeFeet +=
+          (targetAltitudeFeet - displayedAltitudeFeet) * alpha;
+        displayedVerticalSpeedFpm +=
+          (targetVerticalSpeedFpm - displayedVerticalSpeedFpm) * alpha;
+
+        if (Math.abs(targetAltitudeFeet - displayedAltitudeFeet) < 0.02) {
+          displayedAltitudeFeet = targetAltitudeFeet;
+        }
+        if (
+          Math.abs(targetVerticalSpeedFpm - displayedVerticalSpeedFpm) < 0.02
+        ) {
+          displayedVerticalSpeedFpm = targetVerticalSpeedFpm;
+        }
+
+        drawAltimeter(displayedAltitudeFeet);
+        drawVariometer(displayedVerticalSpeedFpm);
+
+        altitudeFeetElement.textContent = Math.round(
+          displayedAltitudeFeet,
+        ).toLocaleString("en-US");
+        verticalSpeedFpmElement.textContent = Math.round(
+          displayedVerticalSpeedFpm,
+        ).toLocaleString("en-US");
+
+        requestAnimationFrame(animateAltimeter);
+      }
+
+      function updateTelemetry(data) {
+        document.getElementById("roll").textContent = data.roll.toFixed(2);
+        document.getElementById("pitch").textContent = data.pitch.toFixed(2);
+        document.getElementById("yaw").textContent = data.yaw.toFixed(2);
+        document.getElementById("altitude").textContent =
+          data.altitude.toFixed(2);
+        document.getElementById("verticalSpeed").textContent =
+          data.vertical_speed.toFixed(2);
+        document.getElementById("counter").textContent = data.counter;
+        document.getElementById("qnh").textContent = data.qnh.toFixed(2);
+        document.getElementById("time").textContent =
+          `t = ${data.time_s.toFixed(3)} s`;
+
+        /* La telemetría entrega altitud en metros y velocidad vertical en m/s. */
+        targetAltitudeFeet = Math.max(0, data.altitude * 3.280839895);
+        targetVerticalSpeedFpm = Math.max(
+          -2000,
+          Math.min(2000, data.vertical_speed * 196.850394),
+        );
+      }
+
+      function sendCommand(command) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(command);
+        }
+      }
+
+      function connect() {
+        const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+        socket = new WebSocket(`${protocol}//${location.host}/ws`);
+        socket.onopen = () => setConnectionState(true);
+        socket.onmessage = (event) => {
+          try {
+            updateTelemetry(JSON.parse(event.data));
+            received++;
+          } catch (error) {
+            console.error("Mensaje WebSocket no válido:", error);
+          }
+        };
+        socket.onerror = (error) => console.error("Error WebSocket:", error);
+        socket.onclose = () => {
+          setConnectionState(false);
+          setTimeout(connect, 1000);
+        };
+      }
+
+      qnhUpButton.addEventListener("click", () => sendCommand("QNH_UP"));
+      qnhDownButton.addEventListener("click", () => sendCommand("QNH_DOWN"));
+      setInterval(() => {
+        document.getElementById("messageRate").textContent =
+          `${received} mensajes/s`;
+        received = 0;
+      }, 1000);
+
+      setConnectionState(false);
+      requestAnimationFrame(animateAltimeter);
+      connect();
+    </script>
+  </body>
+</html>

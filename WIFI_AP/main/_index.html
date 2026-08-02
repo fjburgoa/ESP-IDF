@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ESP32-S3 Flight Display</title>
+<style>
+:root{color-scheme:dark;font-family:Arial,Helvetica,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#0c151e;color:#f4f7fa;display:flex;justify-content:center;align-items:flex-start;padding:24px}.panel{width:min(760px,100%);background:#182838;border-radius:18px;padding:24px;box-shadow:0 12px 32px rgba(0,0,0,.35)}h1{margin:0 0 18px;text-align:center;font-size:clamp(20px,4vw,30px)}.status{text-align:center;margin-bottom:22px}.connected{color:#41d878}.disconnected{color:#ff6464}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{background:#0f1c28;border-radius:12px;padding:16px;min-height:116px}.label{color:#9db0c2;font-size:14px;margin-bottom:8px}.value{font-size:clamp(30px,8vw,48px);font-weight:700;line-height:1}.unit{color:#9db0c2;font-size:16px;margin-left:4px}.qnh-card{grid-column:1/-1;text-align:center}.qnh-control{display:flex;justify-content:center;align-items:center;gap:18px;margin-top:12px}.qnh-button{width:64px;height:54px;border:0;border-radius:10px;background:#2d88d8;color:white;font-size:32px;font-weight:700;cursor:pointer;touch-action:manipulation}.qnh-button:active{transform:translateY(1px);background:#2476bd}.qnh-value{min-width:190px}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:18px;color:#9db0c2;font-size:14px;flex-wrap:wrap}@media(max-width:520px){body{padding:10px}.panel{padding:16px}.grid{grid-template-columns:1fr}.qnh-card{grid-column:auto}}
+</style>
+</head>
+<body>
+<main class="panel">
+<h1>ESP32-S3 · Telemetría dummy</h1>
+<div class="status"><span id="connection" class="disconnected">WebSocket desconectado</span></div>
+<section class="grid">
+<article class="card"><div class="label">Roll</div><span id="roll" class="value">0.00</span><span class="unit">°</span></article>
+<article class="card"><div class="label">Pitch</div><span id="pitch" class="value">0.00</span><span class="unit">°</span></article>
+<article class="card"><div class="label">Yaw</div><span id="yaw" class="value">0.00</span><span class="unit">°</span></article>
+<article class="card"><div class="label">Altitud</div><span id="altitude" class="value">0.00</span><span class="unit">m</span></article>
+<article class="card"><div class="label">Velocidad vertical</div><span id="verticalSpeed" class="value">0.00</span><span class="unit">m/s</span></article>
+<article class="card"><div class="label">Contador</div><span id="counter" class="value">0</span></article>
+<article class="card qnh-card">
+<div class="label">QNH</div>
+<div class="qnh-control">
+<button id="qnhDown" class="qnh-button" type="button" aria-label="Reducir QNH">−</button>
+<div class="qnh-value"><span id="qnh" class="value">1013.25</span><span class="unit">hPa</span></div>
+<button id="qnhUp" class="qnh-button" type="button" aria-label="Aumentar QNH">+</button>
+</div>
+</article>
+</section>
+<div class="footer"><span id="messageRate">0 mensajes/s</span><span id="time">t = 0.000 s</span></div>
+</main>
+<script>
+"use strict";
+const connectionElement=document.getElementById("connection");
+const qnhUpButton=document.getElementById("qnhUp");
+const qnhDownButton=document.getElementById("qnhDown");
+let socket=null;let received=0;
+function setConnectionState(connected){connectionElement.textContent=connected?"WebSocket conectado":"WebSocket desconectado";connectionElement.className=connected?"connected":"disconnected";qnhUpButton.disabled=!connected;qnhDownButton.disabled=!connected}
+function updateTelemetry(data){document.getElementById("roll").textContent=data.roll.toFixed(2);document.getElementById("pitch").textContent=data.pitch.toFixed(2);document.getElementById("yaw").textContent=data.yaw.toFixed(2);document.getElementById("altitude").textContent=data.altitude.toFixed(2);document.getElementById("verticalSpeed").textContent=data.vertical_speed.toFixed(2);document.getElementById("counter").textContent=data.counter;document.getElementById("qnh").textContent=data.qnh.toFixed(2);document.getElementById("time").textContent=`t = ${data.time_s.toFixed(3)} s`}
+function sendCommand(command){if(socket&&socket.readyState===WebSocket.OPEN){socket.send(command)}}
+function connect(){const protocol=location.protocol==="https:"?"wss:":"ws:";socket=new WebSocket(`${protocol}//${location.host}/ws`);socket.onopen=()=>setConnectionState(true);socket.onmessage=event=>{try{updateTelemetry(JSON.parse(event.data));received++}catch(error){console.error("Mensaje WebSocket no válido:",error)}};socket.onerror=error=>console.error("Error WebSocket:",error);socket.onclose=()=>{setConnectionState(false);setTimeout(connect,1000)}}
+qnhUpButton.addEventListener("click",()=>sendCommand("QNH_UP"));
+qnhDownButton.addEventListener("click",()=>sendCommand("QNH_DOWN"));
+setInterval(()=>{document.getElementById("messageRate").textContent=`${received} mensajes/s`;received=0},1000);
+setConnectionState(false);connect();
+</script>
+</body>
+</html>

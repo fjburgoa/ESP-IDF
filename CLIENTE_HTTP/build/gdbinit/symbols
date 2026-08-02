@@ -17,4 +17,4 @@ set confirm off
 set confirm on
 
 # Load application symbols
-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/cliente_https.elf
+file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CLIENTE_HTTP.elf

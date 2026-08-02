@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "Ejemplo24",
-    "project_version":    "52eeb807-dirty",
+    "project_version":    "18ae73f40-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/EJEMPLOS DEL LIBRO/Ejemplo24",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.2/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/EJEMPLOS DEL LIBRO/Ejemplo24/build",
@@ -11,7 +11,7 @@
     "app_elf":            "Ejemplo24.elf",
     "app_bin":            "Ejemplo24.bin",
     "build_type":         "flash_app",
-    "git_revision":       "v5.5.2",
+    "git_revision":       "v5.5.2-dirty",
     "target":             "esp32s3",
     "rev":                "",
     "min_rev":            "0",

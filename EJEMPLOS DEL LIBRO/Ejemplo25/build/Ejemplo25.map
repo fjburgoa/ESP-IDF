@@ -2861,7 +2861,7 @@ Discarded input sections
  .text.esp_get_minimum_free_heap_size
                 0x00000000       0x10 esp-idf/esp_system/libesp_system.a(esp_system_chip.c.obj)
  .rodata.esp_get_idf_version.str1.4
-                0x00000000        0x7 esp-idf/esp_system/libesp_system.a(esp_system_chip.c.obj)
+                0x00000000        0xd esp-idf/esp_system/libesp_system.a(esp_system_chip.c.obj)
  .text.esp_get_idf_version
                 0x00000000        0x8 esp-idf/esp_system/libesp_system.a(esp_system_chip.c.obj)
  .xt.lit        0x00000000       0x28 esp-idf/esp_system/libesp_system.a(esp_system_chip.c.obj)
@@ -48943,10 +48943,10 @@ LOAD C:/Users/fjbur/esp/tools/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-es
                 0x4200cddc                example_wifi_shutdown
  *fill*         0x4200cde7        0x1 
  .text.example_wifi_connect
-                0x4200cde8       0x96 esp-idf/protocol_examples_common/libprotocol_examples_common.a(wifi_connect.c.obj)
-                                 0xa2 (size before relaxing)
+                0x4200cde8       0x97 esp-idf/protocol_examples_common/libprotocol_examples_common.a(wifi_connect.c.obj)
+                                 0x9f (size before relaxing)
                 0x4200cde8                example_wifi_connect
- *fill*         0x4200ce7e        0x2 
+ *fill*         0x4200ce7f        0x1 
  .text.gpio_input_disable
                 0x4200ce80       0x7c esp-idf/esp_driver_gpio/libesp_driver_gpio.a(gpio.c.obj)
  .text.gpio_sleep_input_enable
@@ -73847,7 +73847,7 @@ LOAD C:/Users/fjbur/esp/tools/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-es
  .rodata.example_handler_on_wifi_disconnect.str1.4
                 0x3c0b61f4       0x8e esp-idf/protocol_examples_common/libprotocol_examples_common.a(wifi_connect.c.obj)
  .rodata.example_wifi_connect.str1.4
-                0x3c0b61f4       0x44 esp-idf/protocol_examples_common/libprotocol_examples_common.a(wifi_connect.c.obj)
+                0x3c0b61f4       0x41 esp-idf/protocol_examples_common/libprotocol_examples_common.a(wifi_connect.c.obj)
  .rodata        0x3c0b61f4       0x20 esp-idf/protocol_examples_common/libprotocol_examples_common.a(wifi_connect.c.obj)
  .rodata.__func__$0
                 0x3c0b6214       0x1f esp-idf/protocol_examples_common/libprotocol_examples_common.a(wifi_connect.c.obj)

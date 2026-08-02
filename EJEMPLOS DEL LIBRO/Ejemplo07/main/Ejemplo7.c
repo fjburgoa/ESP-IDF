@@ -137,7 +137,7 @@ void app_main(void)
     // Configurar la alarma (en µs)
     gptimer_alarm_config_t alarm_config = {
         .reload_count = 0,                   // Reiniciar el contador al valor inicial
-        .alarm_count  = 500000,              // 0,5 segundos = 500000 µs
+        .alarm_count  = 250000,              // 0,5 segundos = 500000 µs
         .flags.auto_reload_on_alarm = true,  // Auto-reload para repetir la alarma
     };
 

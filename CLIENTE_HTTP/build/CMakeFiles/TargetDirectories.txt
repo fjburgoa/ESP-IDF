@@ -10,7 +10,7 @@ C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/mo
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/flash.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/encrypted-flash.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/_project_elf_src.dir
-C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/cliente_https.elf.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/CLIENTE_HTTP.elf.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/size.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/size-files.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/CMakeFiles/size-components.dir
@@ -598,6 +598,13 @@ C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_w
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_wifi/CMakeFiles/install.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_wifi/CMakeFiles/install/local.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_wifi/CMakeFiles/install/strip.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/CMakeFiles/__idf_json.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/CMakeFiles/edit_cache.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/CMakeFiles/rebuild_cache.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/CMakeFiles/list_install_components.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/CMakeFiles/install.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/CMakeFiles/install/local.dir
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/CMakeFiles/install/strip.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/console/CMakeFiles/__idf_console.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/console/CMakeFiles/edit_cache.dir
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/console/CMakeFiles/rebuild_cache.dir

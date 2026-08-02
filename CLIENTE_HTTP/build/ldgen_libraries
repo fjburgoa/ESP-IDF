@@ -118,6 +118,7 @@ C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_p
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/wpa_supplicant/libwpa_supplicant.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_coex/libesp_coex.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_wifi/libesp_wifi.a
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/libjson.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/console/libconsole.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_eth/libesp_eth.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/driver/libdriver.a
@@ -125,4 +126,5 @@ C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/proto
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/console/libconsole.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/esp_eth/libesp_eth.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/main/libmain.a
+C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/json/libjson.a
 C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build/esp-idf/protocol_examples_common/libprotocol_examples_common.a

@@ -13,8 +13,8 @@ end
 
 # Load bootloader symbols
 set confirm off
-    add-symbol-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERIALUSB/SERIALUSB/build/bootloader/bootloader.elf
+    add-symbol-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERIALUSB/build/bootloader/bootloader.elf
 set confirm on
 
 # Load application symbols
-file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERIALUSB/SERIALUSB/build/SERIALUSB.elf
+file C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERIALUSB/build/SERIALUSB.elf

@@ -18,5 +18,6 @@
     "freertos.h": "c",
     "hid.h": "c"
   },
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.currentSetup": "C:\\Users\\fjbur\\esp\\v5.5.2\\esp-idf"
 }

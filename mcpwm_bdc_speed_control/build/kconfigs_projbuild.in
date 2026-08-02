@@ -1,0 +1,6 @@
+source "C:/Users/fjbur/esp/v5.5.2/esp-idf/components/bootloader/Kconfig.projbuild"
+source "C:/Users/fjbur/esp/v5.5.2/esp-idf/components/esp_app_format/Kconfig.projbuild"
+source "C:/Users/fjbur/esp/v5.5.2/esp-idf/components/esp_rom/Kconfig.projbuild"
+source "C:/Users/fjbur/esp/v5.5.2/esp-idf/components/esptool_py/Kconfig.projbuild"
+source "C:/Users/fjbur/esp/v5.5.2/esp-idf/components/partition_table/Kconfig.projbuild"
+source "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/mcpwm_bdc_speed_control/main/Kconfig.projbuild"

@@ -1,0 +1,21 @@
+al pulsar el boot aparece el dump de la memoria almacenada
+
+
+--- TRACE DUMP ---
+idx,t_us,evt,core,prio,task_id,aux
+0,125175,2,0,1,0,0
+1,125183,1,0,1,1,0
+2,125994,3,0,1,1,0
+3,126001,2,0,1,1,0
+4,126008,1,0,1,3,0
+5,126994,3,0,1,3,0
+….
+
+
+
+--- END TRACE ---
+
+
+guardarla como .txt y con Excel convertirla a .csv
+
+Ejecutar el script de matlab

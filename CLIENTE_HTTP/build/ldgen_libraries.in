@@ -118,6 +118,7 @@ $<TARGET_FILE:idf::esp_phy>
 $<TARGET_FILE:idf::wpa_supplicant>
 $<TARGET_FILE:idf::esp_coex>
 $<TARGET_FILE:idf::esp_wifi>
+$<TARGET_FILE:idf::json>
 $<TARGET_FILE:idf::console>
 $<TARGET_FILE:idf::esp_eth>
 $<TARGET_FILE:__idf_driver>
@@ -125,4 +126,5 @@ $<TARGET_FILE:idf::protocol_examples_common>
 $<TARGET_FILE:__idf_console>
 $<TARGET_FILE:__idf_esp_eth>
 $<TARGET_FILE:idf::main>
+$<TARGET_FILE:__idf_json>
 $<TARGET_FILE:__idf_protocol_examples_common>

@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coordinador de viraje</title>
+
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b0f;
+        --panel: #131a21;
+        --line: #303a45;
+        --text: #f4f6f8;
+        --muted: #b9c1c9;
+        --blue: #2f93ff;
+        --green: #8fe863;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Arial, Helvetica, sans-serif;
+        color: var(--text);
+        background: radial-gradient(
+          circle at 50% 0%,
+          #1b2530 0,
+          #0b1117 44%,
+          #05080b 100%
+        );
+        padding: 18px;
+      }
+
+      .app {
+        width: min(1000px, 100%);
+        margin: auto;
+        border: 1px solid #28323c;
+        border-radius: 18px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #10161c, #080c10);
+        box-shadow: 0 28px 70px rgba(0, 0, 0, 0.56);
+      }
+
+      .tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-bottom: 1px solid #26303a;
+        background: linear-gradient(180deg, #111820, #0c1218);
+      }
+
+      .tab {
+        padding: 20px 10px 17px;
+        text-align: center;
+        font-size: 1.22rem;
+        color: #c6ccd2;
+        border-bottom: 3px solid transparent;
+      }
+
+      .tab.active {
+        color: var(--blue);
+        border-bottom-color: var(--blue);
+        font-weight: 700;
+      }
+
+      .content {
+        padding: 22px 26px 28px;
+      }
+
+      .controls {
+        padding: 20px;
+        border: 1px solid #2a343e;
+        border-radius: 14px;
+        background: linear-gradient(
+          180deg,
+          rgba(27, 35, 44, 0.95),
+          rgba(17, 23, 30, 0.95)
+        );
+      }
+
+      .control {
+        padding-bottom: 22px;
+        margin-bottom: 22px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .control:last-child {
+        padding-bottom: 0;
+        margin-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .control-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: baseline;
+        margin-bottom: 12px;
+      }
+
+      label {
+        font-size: 1.08rem;
+        font-weight: 700;
+      }
+
+      output {
+        color: var(--blue);
+        font-size: 1.08rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--blue);
+        cursor: pointer;
+      }
+
+      .scale {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+        margin: 16px 0 10px;
+      }
+
+      button {
+        min-height: 54px;
+        border: 1px solid #303b46;
+        border-radius: 11px;
+        background: linear-gradient(180deg, #1a222b, #121820);
+        color: var(--blue);
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button.center {
+        color: var(--green);
+      }
+      button:hover {
+        filter: brightness(1.14);
+      }
+
+      .instrument-wrap {
+        display: grid;
+        place-items: center;
+      }
+
+      svg {
+        width: min(720px, 100%);
+        height: auto;
+        display: block;
+        user-select: none;
+      }
+
+      @media (max-width: 700px) {
+        body {
+          padding: 7px;
+        }
+        .content {
+          padding: 14px;
+        }
+        .buttons {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="app">
+      <div class="tabs">
+        <div class="tab active">1. Controles</div>
+        <div class="tab">2. Instrumento</div>
+      </div>
+
+      <div class="content">
+        <section class="controls">
+          <div class="control">
+            <div class="control-head">
+              <label for="turnRate">Velocidad de ángulo de giro</label>
+              <output id="turnRateValue">0,00 °/s</output>
+            </div>
+
+            <input
+              id="turnRate"
+              type="range"
+              min="-6"
+              max="6"
+              step="0.1"
+              value="0"
+            />
+
+            <div class="scale">
+              <span>−6 °/s<br />(Izquierda)</span>
+              <span>0</span>
+              <span>+6 °/s<br />(Derecha)</span>
+            </div>
+          </div>
+
+          <div class="control">
+            <div class="control-head">
+              <label for="forceDirection"
+                >Dirección de la fuerza resultante</label
+              >
+              <output id="forceValue">0,0°</output>
+            </div>
+
+            <input
+              id="forceDirection"
+              type="range"
+              min="-25"
+              max="25"
+              step="0.5"
+              value="0"
+            />
+
+            <div class="scale">
+              <span>−25°<br />(Izquierda)</span>
+              <span>0°</span>
+              <span>+25°<br />(Derecha)</span>
+            </div>
+          </div>
+        </section>
+
+        <div class="buttons">
+          <button id="leftButton">Giro estándar izquierda</button>
+          <button id="centerButton" class="center">Centrado</button>
+          <button id="rightButton">Giro estándar derecha</button>
+        </div>
+
+        <section class="instrument-wrap">
+          <svg
+            viewBox="0 0 800 800"
+            role="img"
+            aria-label="Coordinador de viraje interactivo"
+          >
+            <defs>
+              <radialGradient id="bezelGradient" cx="45%" cy="34%">
+                <stop offset="0%" stop-color="#777" />
+                <stop offset="42%" stop-color="#414141" />
+                <stop offset="76%" stop-color="#202020" />
+                <stop offset="100%" stop-color="#090909" />
+              </radialGradient>
+
+              <radialGradient id="faceGradient" cx="50%" cy="40%">
+                <stop offset="0%" stop-color="#30343a" />
+                <stop offset="62%" stop-color="#1c2127" />
+                <stop offset="100%" stop-color="#11151a" />
+              </radialGradient>
+
+              <linearGradient id="tubeGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#efedbd" />
+                <stop offset="30%" stop-color="#cacc9f" />
+                <stop offset="58%" stop-color="#85886d" />
+                <stop offset="100%" stop-color="#d7d6aa" />
+              </linearGradient>
+
+              <radialGradient id="ballGradient" cx="34%" cy="26%">
+                <stop offset="0%" stop-color="#c9c9c9" />
+                <stop offset="18%" stop-color="#555" />
+                <stop offset="58%" stop-color="#111" />
+                <stop offset="100%" stop-color="#010101" />
+              </radialGradient>
+
+              <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow
+                  dx="0"
+                  dy="7"
+                  stdDeviation="6"
+                  flood-color="#000"
+                  flood-opacity=".62"
+                />
+              </filter>
+
+              <!-- El clip coincide con la cavidad interior del tubo -->
+              <clipPath id="tubeClip">
+                <path
+                  d="
+              M 250 548
+              Q 400 580 550 548
+              L 538 603
+              Q 400 630 262 603
+              Z"
+                />
+              </clipPath>
+            </defs>
+
+            <!-- Marco -->
+            <circle cx="400" cy="400" r="386" fill="#080808" />
+            <circle
+              cx="400"
+              cy="400"
+              r="375"
+              fill="url(#bezelGradient)"
+              stroke="#b9b9b9"
+              stroke-width="8"
+            />
+            <circle
+              cx="400"
+              cy="400"
+              r="339"
+              fill="url(#faceGradient)"
+              stroke="#262b31"
+              stroke-width="20"
+            />
+
+            <!-- Únicamente las marcas de 0° y las inferiores -->
+            <g fill="#fff">
+              <rect x="127" y="391" width="49" height="19" rx="4" />
+              <rect x="624" y="391" width="49" height="19" rx="4" />
+
+              <rect
+                x="155"
+                y="493"
+                width="48"
+                height="18"
+                rx="3"
+                transform="rotate(-18 179 502)"
+              />
+              <rect
+                x="597"
+                y="493"
+                width="48"
+                height="18"
+                rx="3"
+                transform="rotate(18 621 502)"
+              />
+            </g>
+
+            <!-- Avión más esbelto -->
+            <g
+              id="aircraft"
+              transform="rotate(0 400 400)"
+              filter="url(#shadow)"
+            >
+              <path
+                d="
+            M 170 394
+            L 350 387
+            L 374 379
+            L 385 328
+            Q 388 318 400 318
+            Q 412 318 415 328
+            L 426 379
+            L 450 387
+            L 630 394
+            Q 638 394 638 401
+            Q 638 408 630 409
+            L 449 416
+            L 425 423
+            L 414 435
+            Q 408 441 400 441
+            Q 392 441 386 435
+            L 375 423
+            L 351 416
+            L 170 409
+            Q 162 408 162 401
+            Q 162 394 170 394
+            Z"
+                fill="#fafafa"
+              />
+
+              <path
+                d="M 354 395 L 446 395"
+                stroke="#d8d8d8"
+                stroke-width="3"
+                opacity=".52"
+              />
+            </g>
+
+            <text
+              x="400"
+              y="536"
+              fill="#f6f6f6"
+              text-anchor="middle"
+              font-size="26"
+              font-family="Arial"
+            >
+              TURN COORDINATOR
+            </text>
+
+            <!-- Contenedor de la bola -->
+            <path
+              d="
+          M 250 548
+          Q 400 580 550 548
+          L 538 603
+          Q 400 630 262 603
+          Z"
+              fill="url(#tubeGradient)"
+              stroke="#d2d2aa"
+              stroke-width="3"
+            />
+
+            <path
+              d="
+          M 250 548
+          Q 282 555 306 560
+          L 313 613
+          Q 282 609 262 603 Z"
+              fill="#74775f"
+              opacity=".42"
+            />
+
+            <path
+              d="
+          M 550 548
+          Q 518 555 494 560
+          L 487 613
+          Q 518 609 538 603 Z"
+              fill="#74775f"
+              opacity=".42"
+            />
+
+            <!-- Marcas de centrado -->
+            <g stroke="#22262a" stroke-width="7">
+              <path d="M 365 568 Q 362 591 365 619" />
+              <path d="M 435 568 Q 438 591 435 619" />
+            </g>
+
+            <!-- Bola: centro calculado sobre una curva y siempre dentro del clip -->
+            <g id="ball" clip-path="url(#tubeClip)">
+              <circle cx="400" cy="589" r="24" fill="url(#ballGradient)" />
+              <ellipse
+                cx="391"
+                cy="580"
+                rx="7"
+                ry="5"
+                fill="#fff"
+                opacity=".16"
+              />
+            </g>
+
+            <text
+              x="225"
+              y="620"
+              fill="#fff"
+              text-anchor="middle"
+              font-size="45"
+              font-family="Arial"
+            >
+              L
+            </text>
+
+            <text
+              x="575"
+              y="620"
+              fill="#fff"
+              text-anchor="middle"
+              font-size="45"
+              font-family="Arial"
+            >
+              R
+            </text>
+
+            <text
+              x="400"
+              y="656"
+              fill="#fff"
+              text-anchor="middle"
+              font-size="30"
+              font-family="Arial"
+              letter-spacing="3"
+            >
+              2 MIN.
+            </text>
+
+            <text
+              x="400"
+              y="704"
+              fill="#fff"
+              text-anchor="middle"
+              font-size="23"
+              font-family="Arial"
+            >
+              <tspan x="400" dy="0">NO PITCH</tspan>
+              <tspan x="400" dy="27">INFORMATION</tspan>
+            </text>
+          </svg>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      "use strict";
+
+      const turnRate = document.getElementById("turnRate");
+      const forceDirection = document.getElementById("forceDirection");
+
+      const turnRateValue = document.getElementById("turnRateValue");
+      const forceValue = document.getElementById("forceValue");
+
+      const aircraft = document.getElementById("aircraft");
+      const ball = document.getElementById("ball");
+
+      function formatNumber(value, decimals) {
+        return Number(value).toLocaleString("es-ES", {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        });
+      }
+
+      function aircraftAngle(rate) {
+        /*
+         * 0 °/s  -> horizontal
+         * +3 °/s -> +25° visuales
+         * -3 °/s -> -25° visuales
+         */
+        return Math.max(-50, Math.min(50, (rate / 3) * 25));
+      }
+
+      function ballPosition(forceAngle) {
+        /*
+         * La bola se mueve dentro del tubo siguiendo una parábola.
+         *
+         * El centro de la bola queda limitado a ±112 px.
+         * Con radio 24 px queda margen suficiente respecto a los laterales.
+         * En los extremos sube 24 px.
+         */
+        const n = Math.max(-1, Math.min(1, forceAngle / 25));
+        const x = n * 112;
+        const y = -10 * n * n;
+
+        return { x, y };
+      }
+
+      function update() {
+        const rate = Number(turnRate.value);
+        const force = Number(forceDirection.value);
+
+        const angle = aircraftAngle(rate);
+        const p = ballPosition(force);
+
+        aircraft.setAttribute(
+          "transform",
+          `rotate(${angle.toFixed(2)} 400 400)`,
+        );
+
+        ball.setAttribute(
+          "transform",
+          `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`,
+        );
+
+        turnRateValue.textContent = `${formatNumber(rate, 2)} °/s`;
+        forceValue.textContent = `${formatNumber(force, 1)}°`;
+      }
+
+      turnRate.addEventListener("input", update);
+      forceDirection.addEventListener("input", update);
+
+      document.getElementById("leftButton").addEventListener("click", () => {
+        turnRate.value = -3;
+        forceDirection.value = 0;
+        update();
+      });
+
+      document.getElementById("centerButton").addEventListener("click", () => {
+        turnRate.value = 0;
+        forceDirection.value = 0;
+        update();
+      });
+
+      document.getElementById("rightButton").addEventListener("click", () => {
+        turnRate.value = 3;
+        forceDirection.value = 0;
+        update();
+      });
+
+      update();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=C:\Users\fjbur\esp\tools\python_env\idf5.5_py3.11_env\Scripts\python.exe -DESP_PLATFORM=1 -DCCACHE_ENABLE=1 C:\Users\fjbur\OneDrive\Documentos\ESP_programs\CLIENTE_HTTP
+CMake Error:
+  Running
+
+   'C:/Users/fjbur/esp/tools/tools/ninja/1.12.1/ninja.exe' '-C' 'C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build' '-t' 'recompact'
+
+  failed with:
+
+   ninja: error: failed recompaction: Permission denied
+
+
+
+CMake Error:
+  Running
+
+   'C:/Users/fjbur/esp/tools/tools/ninja/1.12.1/ninja.exe' '-C' 'C:/Users/fjbur/OneDrive/Documentos/ESP_programs/CLIENTE_HTTP/build' '-t' 'restat' 'build.ninja'
+
+  failed with:
+
+   ninja: error: failed recompaction: Permission denied
+
+
+
+CMake Generate step failed.  Build files cannot be regenerated correctly.

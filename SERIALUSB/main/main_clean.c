@@ -78,7 +78,7 @@ void app_main(void)
         tinyusb_cdcacm_write_queue(trx_msg.itf, trx_msg.buf, sizeof(trx_msg.buf));      //envía a la cola de transmisión
         esp_err_t err = tinyusb_cdcacm_write_flush(trx_msg.itf, 0);                     //flushea
 
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(1 / portTICK_PERIOD_MS);
         k++;
     }
 }

@@ -3,11 +3,11 @@ cmake_minimum_required(VERSION 3.16)
 
 if("${CONFIG}" STREQUAL "" OR "${CONFIG}" STREQUAL "")
   file(REMOVE_RECURSE
+  "CLIENTE_HTTP.bin"
+  "CLIENTE_HTTP.map"
   "bootloader\\bootloader.bin"
   "bootloader\\bootloader.elf"
   "bootloader\\bootloader.map"
-  "cliente_https.bin"
-  "cliente_https.map"
   "config\\sdkconfig.cmake"
   "config\\sdkconfig.h"
   "esp-idf\\esptool_py\\flasher_args.json.in"

@@ -5,7 +5,7 @@
   "idf.openOcdConfigs": [
     "board/esp32s3-bridge.cfg"
   ],
-  "idf.portWin": "COM18",
+  "idf.portWin": "COM16",
   "idf.toolsPathWin": "C:\\Users\\fjbur\\esp\\tools\\",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
@@ -16,5 +16,6 @@
     "--query-driver=**",
     "--compile-commands-dir=c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_programs\\NEB_STF_3642BS_1\\build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.currentSetup": "C:\\Users\\fjbur\\esp\\v5.5.2\\esp-idf"
 }
