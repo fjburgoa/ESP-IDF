@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "https_server",
-    "project_version":    "18ae73f40-dirty",
+    "project_version":    "b00191a1a-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.2/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/SERVER_WEB/build",

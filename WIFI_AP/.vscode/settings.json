@@ -15,6 +15,6 @@
     "--query-driver=**",
     "--compile-commands-dir=c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_programs\\WIFI_AP\\build"
   ],
-  "idf.portWin": "COM16",
+  "idf.portWin": "COM19",
   "idf.flashType": "UART"
 }

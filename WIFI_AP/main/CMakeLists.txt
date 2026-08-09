@@ -4,12 +4,28 @@
 #                            REQUIRES esp_wifi esp_event esp_netif nvs_flash esp_http_server
 #                            INCLUDE_DIRS ".")
 
+#idf_component_register(
+#    SRCS
+#        "main.c"
+#        "wifi_ap.c"
+#        "webserver.c"
+#        "websocket.c"
+#        "BMP280.c"
+#        "MPU6050.c"
+       
 idf_component_register(
     SRCS
         "main.c"
         "wifi_ap.c"
         "webserver.c"
         "websocket.c"
+        "BMP280.c"
+        "BNO055.c"
+        "GPS.c"
+        "DataLogger.c"
+
+
+
 
     INCLUDE_DIRS
         "include"
@@ -21,6 +37,8 @@ idf_component_register(
         esp_http_server
         nvs_flash
         esp_timer
+        driver
+        spiffs
 )
 
 target_add_binary_data(

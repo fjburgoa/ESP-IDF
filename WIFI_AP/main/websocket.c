@@ -6,19 +6,27 @@
 
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "driver/temperature_sensor.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs.h"
 #include "websocket.h"
+#include "BMP280.h"
+#include "BNO055.h"
+#include "GPS.h"
+#include "DataLogger.h"
 
-#define TELEMETRY_PERIOD_MS 80U
+/* Añadir también a BMP280.h cuando se consolide la interfaz del driver. */
+extern float vertical_speed;
+
+#define TELEMETRY_PERIOD_MS 100U // 10 Hz
 #define MAX_WS_CLIENTS 4U
-#define JSON_BUFFER_SIZE 576U
+#define JSON_BUFFER_SIZE 1600U
 
+#define QNH_STEP_HPA 0.05f
+#define QNH_MIN_HPA 970.00f
+#define QNH_MAX_HPA 1150.00f
 #define QNH_DEFAULT_HPA 1013.25f
-#define QNH_STEP_HPA 0.10f
-#define QNH_MIN_HPA 800.00f
-#define QNH_MAX_HPA 1100.00f
 
 #define PITCH_OFFSET_DEFAULT_DEG 0
 #define PITCH_OFFSET_STEP_DEG 1
@@ -33,22 +41,20 @@
 #define NVS_KEY_QNH_X100 "qnh_x100"
 #define NVS_KEY_PITCH_OFFSET "pitch_off"
 #define NVS_KEY_HEAD_OFFSET "head_off"
+#define NVS_KEY_MOUNT_MODE "mount_mode"
 
 static const char *TAG = "WEBSOCKET";
 
-static TaskHandle_t s_dummy_task = NULL;
-static portMUX_TYPE s_settings_mux = portMUX_INITIALIZER_UNLOCKED;
+static temperature_sensor_handle_t s_temp_sensor = NULL;
 
-static float s_qnh_hpa = QNH_DEFAULT_HPA;
+static TaskHandle_t s_dummy_task = NULL;
+portMUX_TYPE s_settings_mux = portMUX_INITIALIZER_UNLOCKED;
+
 static int32_t s_pitch_offset_deg = PITCH_OFFSET_DEFAULT_DEG;
 static uint32_t s_heading_offset_deg = HEADING_OFFSET_DEFAULT_DEG;
+static uint32_t s_mount_mode = (uint32_t)BNO055_MOUNT_VERTICAL;
 
-/*
- * Mayor valor de aceleración recibido en valor absoluto.
- * Se conserva el signo del valor que produjo el máximo.
- * No se guarda en NVS: se reinicia con cada arranque o con G_RESET.
- */
-static float s_g_peak = 0.0f;
+float s_qnh_hpa = QNH_DEFAULT_HPA;
 
 typedef struct
 {
@@ -61,6 +67,7 @@ typedef struct
     float qnh_hpa;
     int32_t pitch_offset_deg;
     uint32_t heading_offset_deg;
+    uint32_t mount_mode;
 } settings_snapshot_t;
 
 static settings_snapshot_t settings_get_snapshot(void)
@@ -71,11 +78,12 @@ static settings_snapshot_t settings_get_snapshot(void)
     snapshot.qnh_hpa = s_qnh_hpa;
     snapshot.pitch_offset_deg = s_pitch_offset_deg;
     snapshot.heading_offset_deg = s_heading_offset_deg;
+    snapshot.mount_mode = s_mount_mode;
     portEXIT_CRITICAL(&s_settings_mux);
 
     return snapshot;
 }
-
+//----------------------------------------------------------------------------------
 static esp_err_t settings_save_i32(const char *key, int32_t value)
 {
     nvs_handle_t handle;
@@ -90,21 +98,16 @@ static esp_err_t settings_save_i32(const char *key, int32_t value)
     err = nvs_set_i32(handle, key, value);
 
     if (err == ESP_OK)
-    {
         err = nvs_commit(handle);
-    }
 
     nvs_close(handle);
 
     if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Error guardando %s en NVS: %s",
-                 key, esp_err_to_name(err));
-    }
+        ESP_LOGE(TAG, "Error guardando %s en NVS: %s", key, esp_err_to_name(err));
 
     return err;
 }
-
+//----------------------------------------------------------------------------------
 static esp_err_t settings_save_u32(const char *key, uint32_t value)
 {
     nvs_handle_t handle;
@@ -119,21 +122,16 @@ static esp_err_t settings_save_u32(const char *key, uint32_t value)
     err = nvs_set_u32(handle, key, value);
 
     if (err == ESP_OK)
-    {
         err = nvs_commit(handle);
-    }
 
     nvs_close(handle);
 
     if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Error guardando %s en NVS: %s",
-                 key, esp_err_to_name(err));
-    }
+        ESP_LOGE(TAG, "Error guardando %s en NVS: %s", key, esp_err_to_name(err));
 
     return err;
 }
-
+//----------------------------------------------------------------------------------
 static void settings_load(void)
 {
     nvs_handle_t handle;
@@ -154,10 +152,12 @@ static void settings_load(void)
     int32_t qnh_x100 = (int32_t)lroundf(QNH_DEFAULT_HPA * 100.0f);
     int32_t pitch_offset = PITCH_OFFSET_DEFAULT_DEG;
     uint32_t heading_offset = HEADING_OFFSET_DEFAULT_DEG;
+    uint32_t mount_mode = (uint32_t)BNO055_MOUNT_VERTICAL;
 
     (void)nvs_get_i32(handle, NVS_KEY_QNH_X100, &qnh_x100);
     (void)nvs_get_i32(handle, NVS_KEY_PITCH_OFFSET, &pitch_offset);
     (void)nvs_get_u32(handle, NVS_KEY_HEAD_OFFSET, &heading_offset);
+    (void)nvs_get_u32(handle, NVS_KEY_MOUNT_MODE, &mount_mode);
 
     nvs_close(handle);
 
@@ -179,20 +179,42 @@ static void settings_load(void)
 
     heading_offset %= 360U;
 
+    if (mount_mode > (uint32_t)BNO055_MOUNT_HORIZONTAL)
+    {
+        mount_mode = (uint32_t)BNO055_MOUNT_VERTICAL;
+    }
+
+    /*
+     * Se aplica primero al BNO055 para que toda la fusión NDOF quede expresada
+     * en los ejes lógicos del avión antes de publicar el modo en telemetría.
+     */
+    esp_err_t mount_err =
+        BNO055_set_mount_mode((bno055_mount_mode_t)mount_mode);
+
+    if (mount_err != ESP_OK)
+    {
+        ESP_LOGW(TAG,
+                 "No se pudo recuperar el modo de montaje: %s",
+                 esp_err_to_name(mount_err));
+        mount_mode = (uint32_t)BNO055_MOUNT_VERTICAL;
+    }
+
     portENTER_CRITICAL(&s_settings_mux);
     s_qnh_hpa = qnh;
     s_pitch_offset_deg = pitch_offset;
     s_heading_offset_deg = heading_offset;
+    s_mount_mode = mount_mode;
     portEXIT_CRITICAL(&s_settings_mux);
 
     ESP_LOGI(TAG,
              "Configuración recuperada: QNH=%.2f hPa, pitch offset=%" PRId32
-             " deg, heading offset=%" PRIu32 " deg",
+             " deg, heading offset=%" PRIu32 " deg, montaje=%s",
              (double)qnh,
              pitch_offset,
-             heading_offset);
+             heading_offset,
+             mount_mode == (uint32_t)BNO055_MOUNT_HORIZONTAL ? "H" : "V");
 }
-
+//----------------------------------------------------------------------------------
 static void qnh_change(float increment_hpa)
 {
     float new_value;
@@ -218,7 +240,7 @@ static void qnh_change(float increment_hpa)
 
     ESP_LOGI(TAG, "QNH actualizado: %.2f hPa", (double)new_value);
 }
-
+//----------------------------------------------------------------------------------
 static void pitch_offset_change(int32_t increment_deg)
 {
     int32_t new_value;
@@ -243,7 +265,7 @@ static void pitch_offset_change(int32_t increment_deg)
 
     ESP_LOGI(TAG, "Offset de pitch actualizado: %" PRId32 " deg", new_value);
 }
-
+//----------------------------------------------------------------------------------
 static void heading_offset_change(int32_t increment_deg)
 {
     uint32_t new_value;
@@ -271,41 +293,42 @@ static void heading_offset_change(int32_t increment_deg)
 
     ESP_LOGI(TAG, "Offset de rumbo actualizado: %" PRIu32 " deg", new_value);
 }
-
-
-static float g_peak_update(float g_value)
+//----------------------------------------------------------------------------------
+static void mount_mode_change(bno055_mount_mode_t mode)
 {
-    float peak;
+    esp_err_t err = BNO055_set_mount_mode(mode);
 
-    portENTER_CRITICAL(&s_settings_mux);
-
-    if (fabsf(g_value) > fabsf(s_g_peak))
+    if (err != ESP_OK)
     {
-        s_g_peak = g_value;
+        ESP_LOGW(TAG,
+                 "No se pudo cambiar el modo de montaje: %s",
+                 esp_err_to_name(err));
+        return;
     }
 
-    peak = s_g_peak;
-
+    portENTER_CRITICAL(&s_settings_mux);
+    s_mount_mode = (uint32_t)mode;
     portEXIT_CRITICAL(&s_settings_mux);
 
-    return peak;
-}
+    (void)settings_save_u32(NVS_KEY_MOUNT_MODE, (uint32_t)mode);
 
+    ESP_LOGI(TAG,
+             "Modo de montaje actualizado: %s",
+             mode == BNO055_MOUNT_HORIZONTAL ? "H" : "V");
+}
+//----------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------
 static void g_peak_reset(void)
 {
-    portENTER_CRITICAL(&s_settings_mux);
-    s_g_peak = 0.0f;
-    portEXIT_CRITICAL(&s_settings_mux);
-
-    ESP_LOGI(TAG, "Indicador de G máxima reseteado a 0");
+    BNO055_reset_accel_peaks();
+    ESP_LOGI(TAG, "Indicador de G reseteado: min/max = G actual");
 }
-
+//----------------------------------------------------------------------------------
 static esp_err_t websocket_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET)
     {
-        ESP_LOGI(TAG, "Cliente WebSocket conectado, fd=%d",
-                 httpd_req_to_sockfd(req));
+        ESP_LOGI(TAG, "Cliente WebSocket conectado, fd=%d", httpd_req_to_sockfd(req));
         return ESP_OK;
     }
 
@@ -320,9 +343,7 @@ static esp_err_t websocket_handler(httpd_req_t *req)
     uint8_t *payload = calloc(1U, frame.len + 1U);
 
     if (payload == NULL)
-    {
         return ESP_ERR_NO_MEM;
-    }
 
     frame.payload = payload;
     err = httpd_ws_recv_frame(req, &frame, frame.len);
@@ -356,16 +377,38 @@ static esp_err_t websocket_handler(httpd_req_t *req)
         {
             heading_offset_change(-(int32_t)HEADING_OFFSET_STEP_DEG);
         }
+        else if (strcmp((char *)payload, "MOUNT_MODE_V") == 0)
+        {
+            mount_mode_change(BNO055_MOUNT_VERTICAL);
+        }
+        else if (strcmp((char *)payload, "MOUNT_MODE_H") == 0)
+        {
+            mount_mode_change(BNO055_MOUNT_HORIZONTAL);
+        }
         else if (strcmp((char *)payload, "G_RESET") == 0)
         {
             g_peak_reset();
+        }
+        else if (strcmp((char *)payload, "RECORD_START") == 0)
+        {
+            esp_err_t logger_err = DataLogger_begin_recording();
+
+            if (logger_err != ESP_OK)
+                ESP_LOGW(TAG, "No se pudo iniciar la grabación: %s", esp_err_to_name(logger_err));
+        }
+        else if (strcmp((char *)payload, "RECORD_STOP") == 0)
+        {
+            esp_err_t logger_err = DataLogger_stop_recording();
+
+            if (logger_err != ESP_OK)
+                ESP_LOGW(TAG, "No se pudo detener limpiamente la grabación: %s", esp_err_to_name(logger_err));
         }
     }
 
     free(payload);
     return err;
 }
-
+//----------------------------------------------------------------------------------
 static void websocket_broadcast_work(void *arg)
 {
     websocket_work_t *work = arg;
@@ -416,70 +459,181 @@ static void websocket_broadcast_work(void *arg)
 
     free(work);
 }
+//----------------------------------------------------------------------------------
+static size_t websocket_count_clients(httpd_handle_t server)
+{
+    if (server == NULL)
+    {
+        return 0U;
+    }
 
-static void dummy_telemetry_task(void *arg)
+    int client_fds[MAX_WS_CLIENTS];
+    size_t client_count = MAX_WS_CLIENTS;
+
+    if (httpd_get_client_list(server, &client_count, client_fds) != ESP_OK)
+    {
+        return 0U;
+    }
+
+    size_t websocket_clients = 0U;
+
+    for (size_t i = 0; i < client_count; ++i)
+    {
+        if (httpd_ws_get_fd_info(server, client_fds[i]) ==
+            HTTPD_WS_CLIENT_WEBSOCKET)
+        {
+            ++websocket_clients;
+        }
+    }
+
+    return websocket_clients;
+}
+
+//----------------------------------------------------------------------------------
+static esp_err_t internal_temperature_init(void)
+{
+    temperature_sensor_config_t config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 80);
+
+    esp_err_t err = temperature_sensor_install(&config, &s_temp_sensor);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "No se pudo instalar el sensor interno de temperatura: %s", esp_err_to_name(err));
+        s_temp_sensor = NULL;
+        return err;
+    }
+
+    err = temperature_sensor_enable(s_temp_sensor);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG,
+                 "No se pudo habilitar el sensor interno de temperatura: %s",
+                 esp_err_to_name(err));
+        temperature_sensor_uninstall(s_temp_sensor);
+        s_temp_sensor = NULL;
+        return err;
+    }
+
+    return ESP_OK;
+}
+
+//----------------------------------------------------------------------------------
+static void internal_temperature_log(void)
+{
+    /*
+    if (s_temp_sensor == NULL)
+    {
+        return;
+    }
+
+    float temperature_c = 0.0f;
+
+    esp_err_t err = temperature_sensor_get_celsius(s_temp_sensor, &temperature_c);
+
+
+        if (err == ESP_OK)
+            ESP_LOGI(TAG,  "Temperatura interna ESP32-S3: %.1f C", (double)temperature_c);
+        else
+            ESP_LOGW(TAG,  "Error leyendo temperatura interna: %s", esp_err_to_name(err));
+    */
+}
+
+//----------------------------------------------------------------------------------
+static void telemetry_task(void *arg)
 {
     httpd_handle_t server = (httpd_handle_t)arg;
     TickType_t last_wake = xTaskGetTickCount();
     const TickType_t period = pdMS_TO_TICKS(TELEMETRY_PERIOD_MS);
-    const float pi = 3.14159265358979323846f;
     uint32_t counter = 0U;
-
-    float roll = 0.0f;
-    float pitch = 0.0f;
+    uint32_t temp_log_divider = 0U;
 
     for (;;)
     {
-        const float t = (float)esp_timer_get_time() / 1000000.0f;
-
-        roll += 0.1f;
-        if (roll > 30.0f)
+        /*
+         * Diagnóstico térmico independiente de la existencia de clientes.
+         * TELEMETRY_PERIOD_MS = 100 ms -> una lectura cada 10 ciclos = 1 s.
+         */
+        if (++temp_log_divider >= (1000U / TELEMETRY_PERIOD_MS))
         {
-            roll = -30.0f;
+            temp_log_divider = 0U;
+            internal_temperature_log();
         }
-
-        pitch += 0.1f;
-        if (pitch > 40.0f)
-        {
-            pitch = -40.0f;
-        }
-
-        const float yaw = fmodf(15.0f * t, 360.0f);
-
-        const float altitude =
-            730.0f + 20.0f * sinf((2.0f * pi / 20.0f) * t);
-
-        const float vertical_speed =
-            20.0f * (2.0f * pi / 20.0f) *
-            cosf((2.0f * pi / 20.0f) * t);
-
-        const float turn_rate_dps =
-            3.0f * sinf((2.0f * pi / 12.0f) * t);
-
-        const float force_direction_deg =
-            18.0f * sinf((2.0f * pi / 7.0f) * t + pi / 3.0f);
 
         /*
-         * Señal dummy del acelerómetro, expresada directamente en G.
-         * No debe dividirse entre 9.80665 porque no está en m/s².
-         * Oscila aproximadamente entre -4.2 G y +4.2 G para comprobar
-         * que el indicador conserva el valor de mayor módulo y su signo.
+         * Si no hay ningún cliente WebSocket conectado no se construye el JSON
+         * ni se encola trabajo de transmisión.
          */
-        float g_load =
-            3.65f * sinf((2.0f * pi / 11.0f) * t) +
-            0.55f * sinf((2.0f * pi / 2.3f) * t);
-
-        if (g_load > 5.0f)
+        if (websocket_count_clients(server) == 0U)
         {
-            g_load = 5.0f;
-        }
-        else if (g_load < -5.0f)
-        {
-            g_load = -5.0f;
+            vTaskDelayUntil(&last_wake, period);
+            continue;
         }
 
-        const float g_peak = g_peak_update(g_load);
+        const float t = (float)esp_timer_get_time() / 1000000.0f;
+
+        /*
+         * Instantánea atómica de los datos procesados por la tarea BNO055.
+         * Si todavía no existe una medida válida se transmiten ceros.
+         */
+        const bno055_data_t imu = BNO055_get_data();
+
+        /*
+         * GPS independiente de BMP280/BNO055. De momento no se fusionan
+         * datos entre sensores.
+         */
+        const gps_data_t gps = GPS_get_data();
+
+        const float roll = imu.valid ? imu.roll_deg : 0.0f;
+        const float pitch = imu.valid ? imu.pitch_deg : 0.0f;
+
+        /*
+         * Rumbo absoluto proporcionado directamente por el motor de fusión
+         * NDOF del BNO055.
+         */
+        const float yaw =
+            imu.valid ? imu.heading_deg : 0.0f;
+
+        /*
+         * altitude y vertical_speed proceden de BMP280.c.
+         * Durante la prueba, altitude contiene la señal triangular generada
+         * por main.c y vertical_speed es calculada por el filtro del BMP280.
+         */
+
+        /*
+         * Avión del coordinador:
+         * velocidad de cambio de rumbo compensada por roll y pitch.
+         */
+        const float turn_rate_dps =
+            imu.valid ? imu.yaw_rate_dps : 0.0f;
+
+        /*
+         * Bola del coordinador:
+         * aceleración lateral medida y filtrada en BNO055Task().
+         */
+        const float slip_ball_deg =
+            imu.valid ? imu.slip_ball_deg : 0.0f;
+
+        /*
+         * Magnitud total de aceleración específica:
+         *
+         * g_current = sqrt(gx^2 + gy^2 + gz^2).
+         * g_max y g_min son los extremos retenidos desde el último reset.
+         */
+        const float g_current = imu.valid ? imu.g_current : 0.0f;
+
+        const float g_max = imu.valid ? imu.g_max : 0.0f;
+
+        const float g_min =
+            imu.valid ? imu.g_min : 0.0f;
+
         const settings_snapshot_t settings = settings_get_snapshot();
+
+        /*
+         * Estado del registro SPIFFS mostrado en la interfaz web.
+         */
+        const datalogger_status_t logger =
+            DataLogger_get_status();
 
         websocket_work_t *work = calloc(1U, sizeof(*work));
 
@@ -490,36 +644,143 @@ static void dummy_telemetry_task(void *arg)
             snprintf(
                 work->json,
                 sizeof(work->json),
+
                 "{"
-                "\"counter\":%" PRIu32 ","
-                "\"time_s\":%.3f,"
-                "\"roll\":%.2f,"
-                "\"pitch\":%.2f,"
-                "\"yaw\":%.2f,"
-                "\"altitude\":%.2f,"
-                "\"vertical_speed\":%.2f,"
-                "\"qnh\":%.2f,"
-                "\"pitch_offset_deg\":%" PRId32 ","
-                "\"heading_offset_deg\":%" PRIu32 ","
-                "\"turn_rate_dps\":%.2f,"
-                "\"force_direction_deg\":%.2f,"
-                "\"g_load\":%.2f,"
-                "\"g_peak\":%.2f"
+
+                /*----------------------------------------------------------*/
+                /* Diagnóstico general                                      */
+                /*----------------------------------------------------------*/
+                "\"counter\":%" PRIu32 "," // Contador de mensajes
+                "\"time_s\":%.3f,"         // Tiempo desde el arranque
+
+                /*----------------------------------------------------------*/
+                /* Horizonte artificial                                     */
+                /*----------------------------------------------------------*/
+                "\"roll\":%.2f,"  // Ángulo de alabeo
+                "\"pitch\":%.2f," // Ángulo de cabeceo
+
+                /*----------------------------------------------------------*/
+                /* Girodireccional                                          */
+                /*----------------------------------------------------------*/
+                "\"yaw\":%.2f," // Rumbo mostrado
+
+                /*----------------------------------------------------------*/
+                /* Altímetro y variómetro                                   */
+                /*----------------------------------------------------------*/
+                "\"altitude\":%.2f,"       // Altitud en metros
+                "\"vertical_speed\":%.2f," // Velocidad vertical en m/s
+                "\"temperature\":%.2f,"    // Temperatura del BMP280
+                /*----------------------------------------------------------*/
+                /* GPS / GNSS                                               */
+                /*----------------------------------------------------------*/
+                "\"gps_valid\":%s,"            // FIX GPS válido
+                "\"gps_altitude_m\":%.2f,"     // Altitud GPS [m]
+                "\"gps_latitude_deg\":%.7f,"   // Latitud decimal
+                "\"gps_longitude_deg\":%.7f,"  // Longitud decimal
+                "\"ground_speed_knots\":%.2f," // Ground Speed [kt]
+                "\"ground_speed_kmh\":%.2f,"   // Ground Speed [km/h]
+                "\"gps_track_deg\":%.2f,"      // Track GPS sobre el suelo [deg]
+                "\"gps_utc_day\":%u,"          // Día UTC
+                "\"gps_utc_month\":%u,"        // Mes UTC
+                "\"gps_utc_year\":%u,"         // Año UTC
+                "\"gps_utc_hour\":%u,"         // Hora UTC
+                "\"gps_utc_minute\":%u,"       // Minuto UTC
+                "\"gps_utc_second\":%u,"       // Segundo UTC
+
+                /*----------------------------------------------------------*/
+                /* DataLogger SPIFFS                                        */
+                /*----------------------------------------------------------*/
+                "\"recording\":%s,"            // Grabación activa
+                "\"log_available\":%s,"        // Existe fichero descargable
+                "\"log_samples\":%" PRIu32 "," // Muestras de la sesión actual
+                "\"log_size_bytes\":%u,"       // Tamaño actual del CSV
+
+                /*----------------------------------------------------------*/
+                /* Ajustes persistentes del usuario                         */
+                /*----------------------------------------------------------*/
+                "\"qnh\":%.2f,"                       // Ajuste QNH del altímetro
+                "\"pitch_offset_deg\":%" PRId32 ","   // Offset del horizonte
+                "\"heading_offset_deg\":%" PRIu32 "," // Offset del girodireccional
+                "\"mount_mode\":%" PRIu32 ","         // 0=V, 1=H
+
+                /*----------------------------------------------------------*/
+                /* Coordinador de viraje y bola                             */
+                /*----------------------------------------------------------*/
+                "\"turn_rate_dps\":%.2f," // Régimen de giro, deg/s
+                "\"slip_ball_deg\":%.2f," // Posición física de la bola
+
+                /*----------------------------------------------------------*/
+                /* G-meter de tres agujas                                   */
+                /*----------------------------------------------------------*/
+                "\"g_current\":%.2f," // Aguja blanca: G instantánea
+                "\"g_max\":%.2f,"     // Aguja azul: máximo retenido
+                "\"g_min\":%.2f,"     // Aguja verde: mínimo retenido
+
+                /*----------------------------------------------------------*/
+                /* Diagnóstico del acelerómetro BNO055                     */
+                /*----------------------------------------------------------*/
+                "\"accel_x_g\":%.3f,"     // Aceleración X en G
+                "\"accel_y_g\":%.3f,"     // Aceleración Y en G
+                "\"accel_z_g\":%.3f,"     // Aceleración Z en G
+                "\"accel_total_g\":%.3f," // Módulo total de aceleración
+
+                /*----------------------------------------------------------*/
+                /* Diagnóstico del giróscopo BNO055                        */
+                /*----------------------------------------------------------*/
+                "\"gyro_x_dps\":%.2f,"   // Velocidad angular X
+                "\"gyro_y_dps\":%.2f,"   // Velocidad angular Y
+                "\"gyro_z_dps\":%.2f,"   // Velocidad angular Z del cuerpo
+                "\"yaw_rate_dps\":%.2f," // Cambio de rumbo compensado
+
+                /*----------------------------------------------------------*/
+                /* Estado de validez de la IMU                              */
+                /*----------------------------------------------------------*/
+                "\"imu_valid\":%s" // true cuando hay datos válidos
+
                 "}",
                 counter++,
                 (double)t,
-                (double)roll,
+                -(double)roll,
                 (double)pitch,
                 (double)yaw,
                 (double)altitude,
                 (double)vertical_speed,
+                (double)temperature,
+                gps.fix_valid ? "true" : "false",
+                (double)(gps.fix_valid ? gps.altitude_m : 0.0f),
+                gps.fix_valid ? gps.latitude_deg : 0.0,
+                gps.fix_valid ? gps.longitude_deg : 0.0,
+                (double)(gps.fix_valid ? gps.ground_speed_knots : 0.0f),
+                (double)(gps.fix_valid ? gps.ground_speed_kmh : 0.0f),
+                (double)(gps.fix_valid ? gps.ground_track_deg : 0.0f),
+                gps.utc_day,
+                gps.utc_month,
+                gps.utc_year,
+                gps.utc_hour,
+                gps.utc_minute,
+                gps.utc_second,
+                logger.recording ? "true" : "false",
+                logger.file_available ? "true" : "false",
+                logger.samples,
+                (unsigned)logger.file_size_bytes,
                 (double)settings.qnh_hpa,
                 settings.pitch_offset_deg,
                 settings.heading_offset_deg,
+                settings.mount_mode,
                 (double)turn_rate_dps,
-                (double)force_direction_deg,
-                (double)g_load,
-                (double)g_peak);
+                (double)slip_ball_deg,
+                (double)g_current,
+                (double)g_max,
+                (double)g_min,
+                (double)imu.accel_x_g,
+                (double)imu.accel_y_g,
+                (double)imu.accel_z_g,
+                (double)imu.accel_total_g,
+                (double)imu.gyro_x_dps,
+                (double)imu.gyro_y_dps,
+                (double)imu.gyro_z_dps,
+                (double)imu.yaw_rate_dps,
+                imu.valid ? "true" : "false");
 
             esp_err_t err = httpd_queue_work(
                 server,
@@ -535,7 +796,7 @@ static void dummy_telemetry_task(void *arg)
         vTaskDelayUntil(&last_wake, period);
     }
 }
-
+//----------------------------------------------------------------------------------
 esp_err_t websocket_register_uri(httpd_handle_t server)
 {
     if (server == NULL)
@@ -553,7 +814,7 @@ esp_err_t websocket_register_uri(httpd_handle_t server)
 
     return httpd_register_uri_handler(server, &uri);
 }
-
+//----------------------------------------------------------------------------------
 esp_err_t websocket_start_dummy_stream(httpd_handle_t server)
 {
     if (server == NULL)
@@ -568,9 +829,15 @@ esp_err_t websocket_start_dummy_stream(httpd_handle_t server)
 
     settings_load();
 
+    /*
+     * Sensor térmico interno del ESP32-S3.
+     * Se usa únicamente como diagnóstico y se imprime una vez por segundo.
+     */
+    (void)internal_temperature_init();
+
     BaseType_t ok = xTaskCreate(
-        dummy_telemetry_task,
-        "dummy_telemetry",
+        telemetry_task,
+        "telemetry",
         4096,
         server,
         5,
@@ -582,9 +849,18 @@ esp_err_t websocket_start_dummy_stream(httpd_handle_t server)
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG,
-             "Telemetría dummy iniciada a %u Hz",
-             1000U / TELEMETRY_PERIOD_MS);
+    ESP_LOGI(TAG, "Telemetría iniciada a %u Hz", 1000U / TELEMETRY_PERIOD_MS);
 
     return ESP_OK;
+}
+//----------------------------------------------------------------------------------
+float websocket_get_qnh(void)
+{
+    float qnh;
+
+    portENTER_CRITICAL(&s_settings_mux);
+    qnh = s_qnh_hpa;
+    portEXIT_CRITICAL(&s_settings_mux);
+
+    return qnh;
 }
