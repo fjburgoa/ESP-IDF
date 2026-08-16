@@ -4,7 +4,11 @@
 #include "esp_http_server.h"
 #include "webserver.h"
 #include "websocket.h"
+#include "config.h"
+
+#if DATALOGGER_ENABLED
 #include "DataLogger.h"
+#endif
 
 static const char *TAG = "WEBSERVER";
 extern const unsigned char index_html_start[] asm("_binary_index_html_start");
@@ -22,6 +26,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
 //-------------------------------------------------------------------------------------------------------
 
+#if DATALOGGER_ENABLED
 static esp_err_t download_log_get_handler(httpd_req_t *req)
 {
     const datalogger_status_t status =
@@ -151,6 +156,8 @@ static esp_err_t download_log_get_handler(httpd_req_t *req)
     return result;
 }
 
+#endif
+
 //-------------------------------------------------------------------------------------------------------
 
 httpd_handle_t webserver_start(void)
@@ -173,19 +180,31 @@ httpd_handle_t webserver_start(void)
         .uri = "/",
         .method = HTTP_GET,
         .handler = root_get_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
 
+#if DATALOGGER_ENABLED
     const httpd_uri_t download_uri = {
         .uri = "/download_log",
         .method = HTTP_GET,
         .handler = download_log_get_handler,
-        .user_ctx = NULL
-    };
+        .user_ctx = NULL};
+#endif
 
-    if ((httpd_register_uri_handler(server, &root_uri) != ESP_OK) ||
-        (httpd_register_uri_handler(server, &download_uri) != ESP_OK) ||
-        (websocket_register_uri(server) != ESP_OK))
+    if (httpd_register_uri_handler(server, &root_uri) != ESP_OK)
+    {
+        httpd_stop(server);
+        return NULL;
+    }
+
+#if DATALOGGER_ENABLED
+    if (httpd_register_uri_handler(server, &download_uri) != ESP_OK)
+    {
+        httpd_stop(server);
+        return NULL;
+    }
+#endif
+
+    if (websocket_register_uri(server) != ESP_OK)
     {
         httpd_stop(server);
         return NULL;

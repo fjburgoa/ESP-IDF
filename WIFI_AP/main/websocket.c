@@ -14,7 +14,11 @@
 #include "BMP280.h"
 #include "BNO055.h"
 #include "GPS.h"
+#include "config.h"
+
+#if DATALOGGER_ENABLED
 #include "DataLogger.h"
+#endif
 
 /* Añadir también a BMP280.h cuando se consolide la interfaz del driver. */
 extern float vertical_speed;
@@ -37,6 +41,12 @@ extern float vertical_speed;
 #define HEADING_OFFSET_STEP_DEG 1U
 #define HEADING_OFFSET_MAX_DEG 359U
 
+/*
+ * El ground track GPS sólo se considera un heading útil por encima de esta
+ * velocidad. Por debajo se mantiene el último heading válido.
+ */
+#define GPS_HEADING_MIN_SPEED_KT 5.0f
+
 #define NVS_NAMESPACE "flight_cfg"
 #define NVS_KEY_QNH_X100 "qnh_x100"
 #define NVS_KEY_PITCH_OFFSET "pitch_off"
@@ -53,6 +63,10 @@ portMUX_TYPE s_settings_mux = portMUX_INITIALIZER_UNLOCKED;
 static int32_t s_pitch_offset_deg = PITCH_OFFSET_DEFAULT_DEG;
 static uint32_t s_heading_offset_deg = HEADING_OFFSET_DEFAULT_DEG;
 static uint32_t s_mount_mode = (uint32_t)BNO055_MOUNT_VERTICAL;
+
+/* Último heading GPS válido. Sólo RAM: al arrancar comienza en 0 deg. */
+static float s_last_gps_heading_deg = 0.0f;
+static bool s_last_gps_heading_valid = false;
 
 float s_qnh_hpa = QNH_DEFAULT_HPA;
 
@@ -164,18 +178,12 @@ static void settings_load(void)
     float qnh = (float)qnh_x100 / 100.0f;
 
     if ((qnh < QNH_MIN_HPA) || (qnh > QNH_MAX_HPA))
-    {
         qnh = QNH_DEFAULT_HPA;
-    }
 
     if (pitch_offset < PITCH_OFFSET_MIN_DEG)
-    {
         pitch_offset = PITCH_OFFSET_MIN_DEG;
-    }
     else if (pitch_offset > PITCH_OFFSET_MAX_DEG)
-    {
         pitch_offset = PITCH_OFFSET_MAX_DEG;
-    }
 
     heading_offset %= 360U;
 
@@ -291,7 +299,7 @@ static void heading_offset_change(int32_t increment_deg)
 
     (void)settings_save_u32(NVS_KEY_HEAD_OFFSET, new_value);
 
-    ESP_LOGI(TAG, "Offset de rumbo actualizado: %" PRIu32 " deg", new_value);
+    ESP_LOGI(TAG, "Heading manual actualizado: %" PRIu32 " deg", new_value);
 }
 //----------------------------------------------------------------------------------
 static void mount_mode_change(bno055_mount_mode_t mode)
@@ -389,19 +397,26 @@ static esp_err_t websocket_handler(httpd_req_t *req)
         {
             g_peak_reset();
         }
+
         else if (strcmp((char *)payload, "RECORD_START") == 0)
         {
+#if DATALOGGER_ENABLED
             esp_err_t logger_err = DataLogger_begin_recording();
-
             if (logger_err != ESP_OK)
                 ESP_LOGW(TAG, "No se pudo iniciar la grabación: %s", esp_err_to_name(logger_err));
+#else
+            ESP_LOGI(TAG, "RECORD_START ignorado: DataLogger desactivado");
+#endif
         }
         else if (strcmp((char *)payload, "RECORD_STOP") == 0)
         {
+#if DATALOGGER_ENABLED
             esp_err_t logger_err = DataLogger_stop_recording();
-
             if (logger_err != ESP_OK)
                 ESP_LOGW(TAG, "No se pudo detener limpiamente la grabación: %s", esp_err_to_name(logger_err));
+#else
+            ESP_LOGI(TAG, "RECORD_STOP ignorado: DataLogger desactivado");
+#endif
         }
     }
 
@@ -588,11 +603,42 @@ static void telemetry_task(void *arg)
         const float pitch = imu.valid ? imu.pitch_deg : 0.0f;
 
         /*
-         * Rumbo absoluto proporcionado directamente por el motor de fusión
-         * NDOF del BNO055.
+         * Girodireccional:
+         *
+         * El rumbo mostrado procede exclusivamente del ground track GPS.
+         * Para evitar valores erráticos a muy baja velocidad, sólo se acepta
+         * una nueva muestra cuando:
+         *
+         *   - existe FIX válido,
+         *   - ground_track_deg es finito,
+         *   - ground_speed_knots es finita,
+         *   - GS >= GPS_HEADING_MIN_SPEED_KT.
+         *
+         * Si la muestra deja de ser válida se conserva el último heading GPS.
+         * Si desde el arranque todavía no ha habido ninguno válido, se usa 0°.
          */
-        const float yaw =
-            imu.valid ? imu.heading_deg : 0.0f;
+        const bool gps_heading_sample_valid =
+            gps.fix_valid &&
+            isfinite(gps.ground_track_deg) &&
+            isfinite(gps.ground_speed_knots) &&
+            (gps.ground_speed_knots >= GPS_HEADING_MIN_SPEED_KT);
+
+        if (gps_heading_sample_valid)
+        {
+            float heading = gps.ground_track_deg;
+
+            while (heading < 0.0f)
+                heading += 360.0f;
+
+            while (heading >= 360.0f)
+                heading -= 360.0f;
+
+            s_last_gps_heading_deg = heading;
+            s_last_gps_heading_valid = true;
+        }
+
+        // const float yaw = s_last_gps_heading_valid ? s_last_gps_heading_deg : 0.0f;   //  ###GPS###
+        const float yaw = imu.valid ? imu.heading_deg : 0.0f; //  ###DEMO###
 
         /*
          * altitude y vertical_speed proceden de BMP280.c.
@@ -632,8 +678,19 @@ static void telemetry_task(void *arg)
         /*
          * Estado del registro SPIFFS mostrado en la interfaz web.
          */
-        const datalogger_status_t logger =
-            DataLogger_get_status();
+
+#if DATALOGGER_ENABLED
+        const datalogger_status_t logger = DataLogger_get_status();
+#else
+        /* Mantiene intacta la estructura JSON esperada por index.html. */
+        const struct
+        {
+            bool recording;
+            bool file_available;
+            uint32_t samples;
+            size_t file_size_bytes;
+        } logger = {false, false, 0U, 0U};
+#endif
 
         websocket_work_t *work = calloc(1U, sizeof(*work));
 
@@ -660,7 +717,7 @@ static void telemetry_task(void *arg)
                 "\"pitch\":%.2f," // Ángulo de cabeceo
 
                 /*----------------------------------------------------------*/
-                /* Girodireccional                                          */
+                /* Girodireccional: heading GPS retenido                    */
                 /*----------------------------------------------------------*/
                 "\"yaw\":%.2f," // Rumbo mostrado
 
@@ -700,7 +757,7 @@ static void telemetry_task(void *arg)
                 /*----------------------------------------------------------*/
                 "\"qnh\":%.2f,"                       // Ajuste QNH del altímetro
                 "\"pitch_offset_deg\":%" PRId32 ","   // Offset del horizonte
-                "\"heading_offset_deg\":%" PRIu32 "," // Offset del girodireccional
+                "\"heading_offset_deg\":%" PRIu32 "," // Heading manual persistente
                 "\"mount_mode\":%" PRIu32 ","         // 0=V, 1=H
 
                 /*----------------------------------------------------------*/
@@ -752,7 +809,7 @@ static void telemetry_task(void *arg)
                 gps.fix_valid ? gps.longitude_deg : 0.0,
                 (double)(gps.fix_valid ? gps.ground_speed_knots : 0.0f),
                 (double)(gps.fix_valid ? gps.ground_speed_kmh : 0.0f),
-                (double)(gps.fix_valid ? gps.ground_track_deg : 0.0f),
+                (double)(gps.fix_valid ? gps.ground_track_deg : 0.0f), // gps
                 gps.utc_day,
                 gps.utc_month,
                 gps.utc_year,

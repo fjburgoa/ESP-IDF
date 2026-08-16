@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 
 #include "BNO055.h"
+#include "config.h"
 
 /* -------------------------------------------------------------------------- */
 /* Bus I2C                                                                    */
@@ -48,6 +49,7 @@
 #define BNO055_CHIP_ID_VALUE 0xA0U
 
 #define BNO055_MODE_CONFIG 0x00U
+#define BNO055_MODE_AMG 0x07U
 #define BNO055_MODE_NDOF 0x0CU
 #define BNO055_POWER_NORMAL 0x00U
 #define BNO055_UNIT_SEL_SI 0x00U
@@ -133,6 +135,9 @@ static bno055_data_t s_data = {0};
 static float s_yaw_rate_filtered_dps = 0.0f;
 static float s_slip_ball_filtered_deg = 0.0f;
 static bno055_mount_mode_t s_mount_mode = BNO055_MOUNT_VERTICAL;
+static bool s_attitude_initialized = false;
+static float s_pitch_est_deg = 0.0f;
+static float s_roll_est_deg = 0.0f;
 
 /* -------------------------------------------------------------------------- */
 static esp_err_t bno055_write_u8(uint8_t reg, uint8_t value)
@@ -231,6 +236,72 @@ static esp_err_t bno055_set_mode(uint8_t mode)
 }
 
 /* -------------------------------------------------------------------------- */
+static uint8_t bno055_selected_operation_mode(void)
+{
+#if BNO055_USE_INTERNAL_FUSION
+    return BNO055_MODE_NDOF;
+#else
+    return BNO055_MODE_AMG;
+#endif
+}
+
+/* -------------------------------------------------------------------------- */
+static void bno055_compute_accel_attitude(float ax, float ay, float az,
+                                          float *roll_deg, float *pitch_deg)
+{
+    const float az2 = az * az;
+    *pitch_deg = atan2f(ay, sqrtf(ax * ax + az2)) * (180.0f / (float)M_PI);
+    *roll_deg = atan2f(ax, sqrtf(ay * ay + az2)) * (180.0f / (float)M_PI);
+}
+
+/* -------------------------------------------------------------------------- */
+static void bno055_update_complementary_attitude(
+    const bno055_vector3f_t *accel_ms2,
+    float gyro_x_dps,
+    float gyro_y_dps,
+    float dt_s,
+    float *roll_deg,
+    float *pitch_deg)
+{
+    float roll_acc_deg = 0.0f;
+    float pitch_acc_deg = 0.0f;
+
+    bno055_compute_accel_attitude(
+        accel_ms2->x, accel_ms2->y, accel_ms2->z,
+        &roll_acc_deg, &pitch_acc_deg);
+
+    if (!s_attitude_initialized)
+    {
+        s_roll_est_deg = roll_acc_deg;
+        s_pitch_est_deg = pitch_acc_deg;
+        s_attitude_initialized = true;
+    }
+    else
+    {
+        const float pitch_gyro_deg = s_pitch_est_deg + BNO055_PITCH_GYRO_SIGN * gyro_x_dps * dt_s;
+
+        const float roll_gyro_deg = s_roll_est_deg + BNO055_ROLL_GYRO_SIGN * gyro_y_dps * dt_s;
+
+        float alpha = BNO055_ATTITUDE_TAU_S / (BNO055_ATTITUDE_TAU_S + dt_s);
+        if (!isfinite(alpha))
+            alpha = 0.98f;
+        if (alpha < 0.0f)
+            alpha = 0.0f;
+        else if (alpha > 1.0f)
+            alpha = 1.0f;
+
+        s_pitch_est_deg =
+            alpha * pitch_gyro_deg + (1.0f - alpha) * pitch_acc_deg;
+
+        s_roll_est_deg =
+            alpha * roll_gyro_deg + (1.0f - alpha) * roll_acc_deg;
+    }
+
+    *pitch_deg = s_pitch_est_deg;
+    *roll_deg = s_roll_est_deg;
+}
+
+/* -------------------------------------------------------------------------- */
 static esp_err_t bno055_apply_mount_mode(bno055_mount_mode_t mode)
 {
     uint8_t map_config;
@@ -324,9 +395,9 @@ static esp_err_t bno055_init(void)
         "No se pudo aplicar la orientacion V");
 
     ESP_RETURN_ON_ERROR(
-        bno055_set_mode(BNO055_MODE_NDOF),
+        bno055_set_mode(bno055_selected_operation_mode()),
         TAG,
-        "No se pudo activar NDOF");
+        "No se pudo activar el modo de operacion");
 
     /*
      * Tiempo adicional de estabilización antes de iniciar la tarea.
@@ -520,6 +591,75 @@ static esp_err_t bno055_read_calibration(
 }
 
 /* -------------------------------------------------------------------------- */
+static float bno055_compute_turn_rate_from_attitude_dps(
+    float gyro_x_dps,
+    float gyro_y_dps,
+    float gyro_z_dps,
+    float roll_deg,
+    float pitch_deg)
+{
+    /*
+     * En AMG no existe gravity_ms2 fusionada. Reconstruimos la dirección de
+     * la vertical local a partir del roll/pitch estimados por nuestro filtro
+     * complementario.
+     *
+     * Las ecuaciones deben ser coherentes con bno055_compute_accel_attitude():
+     *
+     *     roll  = atan2(ax, sqrt(ay^2 + az^2))
+     *     pitch = atan2(ay, sqrt(ax^2 + az^2))
+     *
+     * Por tanto, para el rango normal de actitud:
+     *
+     *     g_hat_x = sin(roll)
+     *     g_hat_y = sin(pitch)
+     *     g_hat_z = +sqrt(1 - g_hat_x^2 - g_hat_y^2)
+     *
+     * Finalmente:
+     *
+     *     omega_vertical = omega dot g_hat
+     *
+     * De este modo, un movimiento puro de pitch o roll no debería aparecer
+     * como régimen de giro alrededor de la vertical local.
+     */
+    if (!isfinite(gyro_x_dps) ||
+        !isfinite(gyro_y_dps) ||
+        !isfinite(gyro_z_dps) ||
+        !isfinite(roll_deg) ||
+        !isfinite(pitch_deg))
+    {
+        return 0.0f;
+    }
+
+    const float roll_rad = roll_deg * DEG_TO_RAD;
+    const float pitch_rad = pitch_deg * DEG_TO_RAD;
+
+    const float gx = sinf(roll_rad);
+    const float gy = sinf(pitch_rad);
+
+    float gz2 = 1.0f - gx * gx - gy * gy;
+    if (gz2 < 0.0f)
+        gz2 = 0.0f;
+
+    const float gz = sqrtf(gz2);
+
+    float turn_rate_dps =
+        gyro_x_dps * gx +
+        gyro_y_dps * gy +
+        gyro_z_dps * gz;
+
+    /*
+     * Misma convención gráfica que la rama NDOF:
+     * giro a derechas -> bastón hacia la derecha.
+     */
+    turn_rate_dps = -turn_rate_dps;
+
+    if (fabsf(turn_rate_dps) < TURN_RATE_DEADBAND_DPS)
+        turn_rate_dps = 0.0f;
+
+    return turn_rate_dps;
+}
+
+/* -------------------------------------------------------------------------- */
 static float bno055_compute_vertical_turn_rate_dps(
     float gyro_x_dps,
     float gyro_y_dps,
@@ -535,13 +675,10 @@ static float bno055_compute_vertical_turn_rate_dps(
     const float gy = gravity_ms2->y;
     const float gz = gravity_ms2->z;
 
-    const float gravity_norm =
-        sqrtf(gx * gx + gy * gy + gz * gz);
+    const float gravity_norm = sqrtf(gx * gx + gy * gy + gz * gz);
 
     if (!isfinite(gravity_norm) || (gravity_norm < 1.0f))
-    {
         return 0.0f;
-    }
 
     /*
      * Proyección de la velocidad angular sobre la vertical local:
@@ -551,11 +688,7 @@ static float bno055_compute_vertical_turn_rate_dps(
      * Esto evita que cambios puros de pitch o roll generen, idealmente,
      * indicación de régimen de giro.
      */
-    float turn_rate_dps =
-        (gyro_x_dps * gx +
-         gyro_y_dps * gy +
-         gyro_z_dps * gz) /
-        gravity_norm;
+    float turn_rate_dps = (gyro_x_dps * gx + gyro_y_dps * gy + gyro_z_dps * gz) / gravity_norm;
 
     /*
      * Convención gráfica actual:
@@ -597,47 +730,73 @@ static float bno055_filter_yaw_rate_dps(
 
 /* -------------------------------------------------------------------------- */
 static float bno055_compute_slip_ball_deg(
-    float accel_y_g,
-    float accel_z_g,
+    float accel_x_g,
+    float roll_deg,
     float dt_s)
 {
     /*
-     * La bola de un inclinómetro responde a la dirección de la aceleración
-     * específica resultante en el plano lateral/vertical del avión.
+     * Bola de resbale/deslizamiento en modo AMG.
      *
-     * En reposo y nivelado:
-     *      accel_y ~= 0 g
-     *      accel_z ~= +1 g
-     *      ball_angle = 0 deg
+     * El acelerómetro mide aceleración específica total:
      *
-     * En un viraje coordinado, la resultante permanece alineada con el eje
-     * vertical del avión y la bola debe permanecer centrada.
+     *     a_meas = g + a_linear
      *
-     * atan2() evita utilizar una ganancia arbitraria y proporciona directamente
-     * el ángulo físico de la resultante.
+     * Para la bola interesa la componente lateral NO gravitatoria. Con nuestro
+     * convenio de ejes:
+     *
+     *     X = transversal (+ izquierda)
+     *     Y = longitudinal (+ morro)
+     *     Z = vertical (+ arriba)
+     *
+     * y usando la misma geometría empleada en el estimador de actitud:
+     *
+     *     g_x / g = sin(roll)
+     *
+     * Por tanto, en unidades de G:
+     *
+     *     a_lateral_g = accel_x_g - sin(roll)
+     *
+     * Esta magnitud equivale a la componente X de una aceleración lineal
+     * reconstruida por software, similar a linear_acceleration_ms2.x que
+     * proporcionaba el motor de fusión NDOF.
+     *
+     * Se convierte a un ángulo equivalente de bola mediante:
+     *
+     *     ball_angle = atan(a_lateral_g)
+     *
+     * de modo que:
+     *     0.0 G ->  0.00 deg
+     *     0.1 G ->  5.71 deg
+     *     0.2 G -> 11.31 deg
      */
-    if (!isfinite(accel_y_g) || !isfinite(accel_z_g))
+    if (!isfinite(accel_x_g) ||
+        !isfinite(roll_deg))
     {
         return s_slip_ball_filtered_deg;
     }
 
-    const float resultant_g =
-        sqrtf(accel_y_g * accel_y_g +
-              accel_z_g * accel_z_g);
-
-    if (resultant_g < 0.10f)
+    if (!isfinite(dt_s) || (dt_s <= 0.0f))
     {
-        return s_slip_ball_filtered_deg;
+        dt_s = (float)BNO055_PERIOD_MS / 1000.0f;
     }
+
+    const float roll_rad =
+        roll_deg * DEG_TO_RAD;
+
+    const float gravity_x_g =
+        sinf(roll_rad);
+
+    const float lateral_accel_g =
+        accel_x_g - gravity_x_g;
 
     float raw_ball_deg =
-        atan2f(accel_y_g, accel_z_g) *
+        atanf(lateral_accel_g) *
         (180.0f / (float)M_PI);
 
     /*
-     * Convención gráfica.
-     * Si durante la prueba física el sentido resulta invertido, basta con
-     * cambiar el signo de raw_ball_deg aquí.
+     * Convención gráfica actual.
+     * Si en la prueba física el sentido queda invertido, basta con eliminar
+     * o cambiar este signo.
      */
     raw_ball_deg = -raw_ball_deg;
 
@@ -647,7 +806,7 @@ static float bno055_compute_slip_ball_deg(
     }
 
     /*
-     * Dinámica lenta y amortiguada, similar a una bola real en fluido.
+     * Dinámica amortiguada del indicador.
      */
     float alpha =
         1.0f - expf(-dt_s / SLIP_BALL_FILTER_TAU_S);
@@ -666,18 +825,95 @@ static float bno055_compute_slip_ball_deg(
         (raw_ball_deg - s_slip_ball_filtered_deg);
 
     if (s_slip_ball_filtered_deg > SLIP_BALL_LIMIT_DEG)
-    {
         s_slip_ball_filtered_deg = SLIP_BALL_LIMIT_DEG;
-    }
     else if (s_slip_ball_filtered_deg < -SLIP_BALL_LIMIT_DEG)
-    {
         s_slip_ball_filtered_deg = -SLIP_BALL_LIMIT_DEG;
-    }
 
     return s_slip_ball_filtered_deg;
 }
 
 /* -------------------------------------------------------------------------- */
+
+#define GYRO_FILTER_TAU_S 0.15f
+static float s_gyro_x_filtered_dps = 0.0f;
+static float s_gyro_y_filtered_dps = 0.0f;
+static float s_gyro_z_filtered_dps = 0.0f;
+
+static bool s_gyro_filter_initialized = false;
+
+/* -------------------------------------------------------------------------- */
+static void bno055_filter_gyro_dps(
+    float gyro_x_dps,
+    float gyro_y_dps,
+    float gyro_z_dps,
+    float dt_s,
+    float *gyro_x_filtered_dps,
+    float *gyro_y_filtered_dps,
+    float *gyro_z_filtered_dps)
+{
+    if (!isfinite(gyro_x_dps) ||
+        !isfinite(gyro_y_dps) ||
+        !isfinite(gyro_z_dps))
+    {
+        return;
+    }
+
+    if (!isfinite(dt_s) || dt_s <= 0.0f)
+    {
+        dt_s = (float)BNO055_PERIOD_MS / 1000.0f;
+    }
+
+    /*
+     * Primera muestra: inicializamos directamente con la medida
+     * para evitar el transitorio de arranque desde cero.
+     */
+    if (!s_gyro_filter_initialized)
+    {
+        s_gyro_x_filtered_dps = gyro_x_dps;
+        s_gyro_y_filtered_dps = gyro_y_dps;
+        s_gyro_z_filtered_dps = gyro_z_dps;
+
+        s_gyro_filter_initialized = true;
+    }
+    else
+    {
+        /*
+         * Filtro paso bajo de primer orden:
+         *
+         * y[k] = y[k-1] + alpha * (x[k] - y[k-1])
+         *
+         * alpha = 1 - exp(-dt/tau)
+         */
+        const float alpha =
+            1.0f - expf(-dt_s / GYRO_FILTER_TAU_S);
+
+        s_gyro_x_filtered_dps +=
+            alpha * (gyro_x_dps - s_gyro_x_filtered_dps);
+
+        s_gyro_y_filtered_dps +=
+            alpha * (gyro_y_dps - s_gyro_y_filtered_dps);
+
+        s_gyro_z_filtered_dps +=
+            alpha * (gyro_z_dps - s_gyro_z_filtered_dps);
+    }
+
+    *gyro_x_filtered_dps = s_gyro_x_filtered_dps;
+    *gyro_y_filtered_dps = s_gyro_y_filtered_dps;
+    *gyro_z_filtered_dps = s_gyro_z_filtered_dps;
+}
+
+/* -------------------------------------------------------------------------- */
+/*
+En el BNO055 tenemos tres magnitudes diferentes:
+
+acceleration_ms2:        lectura del acelerómetro, es decir, aceleración específica total medida, que contiene el efecto de la gravedad
+                         y de las aceleraciones debidas al movimiento del dispositivo.
+
+gravity_ms2:             estimación del vector gravedad realizada por la fusión del BNO055.
+
+linear_acceleration_ms2: estimación de la aceleración debida al movimiento, después de eliminar la componente de gravedad.
+*/
+
 static esp_err_t bno055_read_sample(bno055_data_t *sample, float dt_s)
 {
     if (sample == NULL)
@@ -686,138 +922,157 @@ static esp_err_t bno055_read_sample(bno055_data_t *sample, float dt_s)
     bno055_data_t data = {0};
 
     ESP_RETURN_ON_ERROR(
-        bno055_read_vector_scaled(
-            BNO055_REG_ACCEL_DATA_X_LSB,
-            BNO055_ACCEL_LSB_PER_MS2,
-            &data.acceleration_ms2),
-        TAG,
-        "Error leyendo aceleración");
+        bno055_read_vector_scaled(BNO055_REG_ACCEL_DATA_X_LSB,
+                                  BNO055_ACCEL_LSB_PER_MS2,
+                                  &data.acceleration_ms2),
+        TAG, "Error leyendo acceleration_ms2");
 
     ESP_RETURN_ON_ERROR(
-        bno055_read_vector_scaled(
-            BNO055_REG_MAG_DATA_X_LSB,
-            BNO055_MAG_LSB_PER_UT,
-            &data.magnetic_field_ut),
-        TAG,
-        "Error leyendo magnetómetro");
+        bno055_read_vector_scaled(BNO055_REG_MAG_DATA_X_LSB,
+                                  BNO055_MAG_LSB_PER_UT,
+                                  &data.magnetic_field_ut),
+        TAG, "Error leyendo magnetometro");
 
     bno055_vector3f_t gyro = {0};
 
     ESP_RETURN_ON_ERROR(
-        bno055_read_vector_scaled(
-            BNO055_REG_GYRO_DATA_X_LSB,
-            BNO055_GYRO_LSB_PER_DPS,
-            &gyro),
-        TAG,
-        "Error leyendo giróscopo");
+        bno055_read_vector_scaled(BNO055_REG_GYRO_DATA_X_LSB,
+                                  BNO055_GYRO_LSB_PER_DPS,
+                                  &gyro),
+        TAG, "Error leyendo giroscopo");
 
     data.gyro_x_dps = gyro.x;
     data.gyro_y_dps = gyro.y;
     data.gyro_z_dps = gyro.z;
 
-    ESP_RETURN_ON_ERROR(
-        bno055_read_euler(
-            &data.heading_deg,
-            &data.roll_deg,
-            &data.pitch_deg),
-        TAG,
-        "Error leyendo Euler");
+#if BNO055_USE_INTERNAL_FUSION
 
     ESP_RETURN_ON_ERROR(
-        bno055_read_quaternion(
-            &data.quaternion),
-        TAG,
-        "Error leyendo cuaternión");
+        bno055_read_euler(&data.heading_deg, &data.roll_deg, &data.pitch_deg),
+        TAG, "Error leyendo Euler");
 
     ESP_RETURN_ON_ERROR(
-        bno055_read_vector_scaled(
-            BNO055_REG_LINEAR_ACC_X_LSB,
-            BNO055_ACCEL_LSB_PER_MS2,
-            &data.linear_acceleration_ms2),
-        TAG,
-        "Error leyendo aceleración lineal");
+        bno055_read_quaternion(&data.quaternion),
+        TAG, "Error leyendo cuaternion");
 
     ESP_RETURN_ON_ERROR(
-        bno055_read_vector_scaled(
-            BNO055_REG_GRAVITY_X_LSB,
-            BNO055_ACCEL_LSB_PER_MS2,
-            &data.gravity_ms2),
-        TAG,
-        "Error leyendo gravedad");
+        bno055_read_vector_scaled(BNO055_REG_LINEAR_ACC_X_LSB,
+                                  BNO055_ACCEL_LSB_PER_MS2,
+                                  &data.linear_acceleration_ms2),
+        TAG, "Error leyendo aceleracion lineal");
+
+    ESP_RETURN_ON_ERROR(
+        bno055_read_vector_scaled(BNO055_REG_GRAVITY_X_LSB,
+                                  BNO055_ACCEL_LSB_PER_MS2,
+                                  &data.gravity_ms2),
+        TAG, "Error leyendo gravedad");
+
+#else
+
+    bno055_update_complementary_attitude(
+        &data.acceleration_ms2,
+        data.gyro_x_dps,
+        data.gyro_y_dps,
+        dt_s,
+        &data.roll_deg,
+        &data.pitch_deg);
+
+    /* Campos conservados por compatibilidad; no son válidos en AMG. */
+    data.heading_deg = 0.0f;
+    data.quaternion = (bno055_quaternionf_t){0};
+    data.linear_acceleration_ms2 = (bno055_vector3f_t){0};
+    data.gravity_ms2 = (bno055_vector3f_t){0};
+
+#endif
 
     uint8_t temperature_raw = 0U;
+    ESP_RETURN_ON_ERROR(
+        bno055_read_u8(BNO055_REG_TEMP, &temperature_raw),
+        TAG, "Error leyendo temperatura");
+    data.temperature_c = (int8_t)temperature_raw;
 
     ESP_RETURN_ON_ERROR(
-        bno055_read_u8(
-            BNO055_REG_TEMP,
-            &temperature_raw),
-        TAG,
-        "Error leyendo temperatura");
+        bno055_read_calibration(&data.calibration_system,
+                                &data.calibration_gyro,
+                                &data.calibration_accel,
+                                &data.calibration_mag),
+        TAG, "Error leyendo calibracion");
 
-    data.temperature_c =
-        (int8_t)temperature_raw;
-
-    ESP_RETURN_ON_ERROR(
-        bno055_read_calibration(
-            &data.calibration_system,
-            &data.calibration_gyro,
-            &data.calibration_accel,
-            &data.calibration_mag),
-        TAG,
-        "Error leyendo calibración");
-
-    /*
-     * Conversión a G para conservar las variables que ya consume
-     * websocket.c / index.html.
-     */
-    data.accel_x_g =
-        data.acceleration_ms2.x / STANDARD_GRAVITY_MS2;
-
-    data.accel_y_g =
-        data.acceleration_ms2.y / STANDARD_GRAVITY_MS2;
-
-    data.accel_z_g =
-        data.acceleration_ms2.z / STANDARD_GRAVITY_MS2;
+    data.accel_x_g = data.acceleration_ms2.x / STANDARD_GRAVITY_MS2;
+    data.accel_y_g = data.acceleration_ms2.y / STANDARD_GRAVITY_MS2;
+    data.accel_z_g = data.acceleration_ms2.z / STANDARD_GRAVITY_MS2;
 
     data.accel_total_g =
-        sqrtf(
-            data.accel_x_g * data.accel_x_g +
-            data.accel_y_g * data.accel_y_g +
-            data.accel_z_g * data.accel_z_g);
+        sqrtf(data.accel_x_g * data.accel_x_g +
+              data.accel_y_g * data.accel_y_g +
+              data.accel_z_g * data.accel_z_g);
 
+#if BNO055_USE_INTERNAL_FUSION
     const float yaw_rate_raw_dps =
         bno055_compute_vertical_turn_rate_dps(
             data.gyro_x_dps,
             data.gyro_y_dps,
             data.gyro_z_dps,
             &data.gravity_ms2);
+#else
+    /*
+     * En AMG proyectamos el vector de velocidad angular sobre la vertical
+     * local reconstruida con el roll/pitch de nuestro filtro complementario.
+     * Así evitamos que cambios de actitud contaminen directamente el
+     * indicador de giro.
+     */
+
+    float gyro_x_filtered_dps = 0.0f;
+    float gyro_y_filtered_dps = 0.0f;
+    float gyro_z_filtered_dps = 0.0f;
+
+    bno055_filter_gyro_dps(
+        data.gyro_x_dps,
+        data.gyro_y_dps,
+        data.gyro_z_dps,
+        dt_s,
+        &gyro_x_filtered_dps,
+        &gyro_y_filtered_dps,
+        &gyro_z_filtered_dps);
+
+    const float yaw_rate_raw_dps =
+        bno055_compute_turn_rate_from_attitude_dps(
+            gyro_x_filtered_dps,
+            gyro_y_filtered_dps,
+            gyro_z_filtered_dps,
+            data.roll_deg,
+            data.pitch_deg);
+#endif
 
     data.yaw_rate_dps =
-        bno055_filter_yaw_rate_dps(
-            yaw_rate_raw_dps,
-            dt_s);
+        bno055_filter_yaw_rate_dps(yaw_rate_raw_dps, dt_s);
+
+#if !BNO055_USE_INTERNAL_FUSION
+    static float s_yaw_demo_deg = 0.0f;
+
+    /* Si lo integramos, obtenemos heading ... esto sólo si no hay fusión*/
+    s_yaw_demo_deg += data.yaw_rate_dps * dt_s;
+
+    while (s_yaw_demo_deg >= 360.0f)
+        s_yaw_demo_deg -= 360.0f;
+
+    while (s_yaw_demo_deg < 0.0f)
+        s_yaw_demo_deg += 360.0f;
+
+    data.heading_deg = s_yaw_demo_deg;
+#endif
 
     data.slip_ball_deg =
         bno055_compute_slip_ball_deg(
-            data.accel_y_g,
-            data.accel_z_g,
+            data.accel_x_g,
+            data.roll_deg,
             dt_s);
 
-    /*
-     * Magnitud total de aceleración específica expresada en G.
-     *
-     *     G = sqrt(Gx^2 + Gy^2 + Gz^2)
-     *
-     * Es independiente de la orientación del equipo. En reposo debe ser
-     * aproximadamente 1.00 G.
-     */
-    data.g_current =
-        sqrtf(data.accel_x_g * data.accel_x_g +
-              data.accel_y_g * data.accel_y_g +
-              data.accel_z_g * data.accel_z_g);
+#define SLIP_BALL_GAIN 5.0f
+    data.slip_ball_deg = SLIP_BALL_GAIN * data.slip_ball_deg;
 
+    data.g_current = data.accel_total_g;
     data.valid = true;
-
     *sample = data;
 
     return ESP_OK;
@@ -860,14 +1115,10 @@ static void BNO055Task(void *pvParameters)
                 sample.g_min = s_data.g_min;
 
                 if (sample.g_current > sample.g_max)
-                {
                     sample.g_max = sample.g_current;
-                }
 
                 if (sample.g_current < sample.g_min)
-                {
                     sample.g_min = sample.g_current;
-                }
             }
 
             s_data = sample;
@@ -944,7 +1195,7 @@ esp_err_t BNO055_set_mount_mode(bno055_mount_mode_t mode)
         err = bno055_apply_mount_mode(mode);
 
     if (err == ESP_OK)
-        err = bno055_set_mode(BNO055_MODE_NDOF);
+        err = bno055_set_mode(bno055_selected_operation_mode());
 
     if (err == ESP_OK)
     {
@@ -961,6 +1212,15 @@ esp_err_t BNO055_set_mount_mode(bno055_mount_mode_t mode)
 
         s_yaw_rate_filtered_dps = 0.0f;
         s_slip_ball_filtered_deg = 0.0f;
+        s_attitude_initialized = false;
+        s_pitch_est_deg = 0.0f;
+        s_roll_est_deg = 0.0f;
+
+        /* NUEVO */
+        s_gyro_x_filtered_dps = 0.0f;
+        s_gyro_y_filtered_dps = 0.0f;
+        s_gyro_z_filtered_dps = 0.0f;
+        s_gyro_filter_initialized = false;
 
         vTaskDelay(pdMS_TO_TICKS(150U));
     }
@@ -1000,10 +1260,7 @@ esp_err_t BNO055_start(void)
     if (s_bno055_task != NULL)
         return ESP_ERR_INVALID_STATE;
 
-    ESP_RETURN_ON_ERROR(
-        bno055_init(),
-        TAG,
-        "No se pudo inicializar BNO055");
+    ESP_RETURN_ON_ERROR(bno055_init(), TAG, "No se pudo inicializar BNO055");
 
     /*
      * Estado inicial del G-meter.
@@ -1015,14 +1272,11 @@ esp_err_t BNO055_start(void)
     s_data.valid = false;
     portEXIT_CRITICAL(&s_data_mux);
 
-    BaseType_t ok =
-        xTaskCreate(
-            BNO055Task,
-            "bno055",
-            5120,
-            NULL,
-            5,
-            &s_bno055_task);
+    s_attitude_initialized = false;
+    s_pitch_est_deg = 0.0f;
+    s_roll_est_deg = 0.0f;
+
+    BaseType_t ok = xTaskCreate(BNO055Task, "bno055", 5120, NULL, 5, &s_bno055_task);
 
     if (ok != pdPASS)
     {
@@ -1030,10 +1284,14 @@ esp_err_t BNO055_start(void)
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(
-        TAG,
-        "BNO055 iniciado en NDOF a %u Hz",
-        1000U / BNO055_PERIOD_MS);
+    ESP_LOGI(TAG,
+             "BNO055 iniciado en %s a %u Hz",
+#if BNO055_USE_INTERNAL_FUSION
+             "NDOF",
+#else
+             "AMG",
+#endif
+             1000U / BNO055_PERIOD_MS);
 
     return ESP_OK;
 }

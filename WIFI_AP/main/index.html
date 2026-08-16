@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
-    <title>ESP32-S3 Flight Display</title>
+    <title>ULM-EFIS</title>
     <style>
       /* Modo compacto: panel e instrumentos reducidos aproximadamente un 20 %. */
       :root {
@@ -458,9 +458,8 @@
           #111 72%,
           #050505 100%
         );
-        border: 18px solid #242424;
+        border: 0;
         box-shadow:
-          inset 0 0 0 4px #050505,
           inset 0 0 24px rgba(255, 255, 255, 0.1),
           0 5px 14px rgba(0, 0, 0, 0.45);
       }
@@ -485,9 +484,9 @@
       }
 
       /*
-       * GPS course/track bug.
+       * Heading manual bug.
        * Se sitúa sobre el perímetro y gira alrededor del centro del instrumento.
-       * El triángulo amarillo apunta hacia el centro.
+       * El triángulo amarillo apunta hacia el heading fijado por el usuario.
        */
       .gps-track-bug {
         position: absolute;
@@ -599,31 +598,632 @@
           font-size: clamp(20px, 7vw, 30px);
         }
       }
+    
+
+      /* ============================================================
+       * INSTRUMENTOS SUPERIORES
+       *
+       * Altímetro y horizonte muestran sus datos principales en las
+       * esquinas superiores de la tarjeta, liberando la zona inferior
+       * del círculo. Los tres instrumentos de la primera fila utilizan
+       * el mismo diámetro exterior.
+       * ============================================================ */
+      .top-instrument-section {
+        position: relative;
+        justify-content: flex-start;
+      }
+
+      .top-instrument-section .instrument-wrap {
+        width: min(420px, 100%);
+      }
+
+      .instrument-corner-readout {
+        position: absolute;
+        top: 9px;
+        z-index: 30;
+        min-width: 112px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        background: rgba(5, 10, 15, 0.68);
+        box-shadow: 0 2px 7px rgba(0, 0, 0, 0.32);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.12;
+      }
+
+      .instrument-corner-readout.left {
+        left: 9px;
+        text-align: left;
+      }
+
+      .instrument-corner-readout.right {
+        right: 9px;
+        text-align: right;
+      }
+
+      .corner-readout-label {
+        display: block;
+        color: #9db0c2;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        margin-bottom: 3px;
+        white-space: nowrap;
+      }
+
+      .corner-readout-value {
+        display: block;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .corner-readout-value strong {
+        color: #ffffff;
+        font-size: inherit;
+        font-weight: 700;
+      }
+
+      .corner-readout-unit {
+        color: #c5d2de;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      /* Los controles siguen debajo del círculo, pero sin readout intermedio. */
+      .top-instrument-section .instrument-adjustment {
+        margin-top: 2px;
+      }
+
+
+      /* Controles compactos de la fila superior:
+         [-]  QNH 1013.25 hPa  [+]
+         [-]  Ajuste inicial de pitch 0°  [+] */
+      .top-instrument-section .instrument-adjustment {
+        margin-top: 0;
+        padding: 3px 5px;
+        border-radius: 6px;
+      }
+
+      .top-instrument-section .adjustment-control {
+        grid-template-columns: 32px minmax(0, 1fr) 32px;
+        gap: 5px;
+      }
+
+      .top-instrument-section .adjustment-button {
+        width: 32px;
+        height: 27px;
+        min-height: 27px;
+        border-radius: 5px;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .top-instrument-section .adjustment-value {
+        font-size: 13px;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .top-instrument-section .adjustment-unit {
+        font-size: 11px;
+      }
+
+      .adjustment-inline-label {
+        color: #c5d2de;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 5px;
+      }
+
+      /* Un poco más de diámetro para los tres instrumentos superiores. */
+      .top-instrument-section .instrument-wrap {
+        width: min(440px, 100%);
+      }
+
+
+      .corner-readout-section { position: relative; justify-content: flex-start; }
+      .corner-readout-section .instrument-corner-readout { top: 9px; }
+      .heading-section .instrument-adjustment { margin-top: 0; padding: 3px 5px; border-radius: 6px; }
+      .heading-section .adjustment-control { grid-template-columns: 32px minmax(0,1fr) 32px; gap: 5px; }
+      .heading-section .adjustment-button { width:32px; height:27px; min-height:27px; font-size:18px; line-height:1; }
+      .heading-section .adjustment-value { font-size:13px; line-height:1; white-space:nowrap; }
+      /* ============================================================
+       * TABLET APAISADA - PRIORIDAD A INSTRUMENTOS
+       *
+       * No se escala globalmente la página.
+       * Los 6 instrumentos se organizan en 3 columnas x 2 filas.
+       * LAT/LON quedan inmediatamente después.
+       * El resto de la información continúa mediante scroll normal.
+       * ============================================================ */
+      @media (min-width: 700px) and (orientation: landscape) {
+
+        .top-instrument-section .instrument-wrap {
+          width: min(330px, 100%);
+        }
+
+        .top-instrument-section .instrument-adjustment {
+          margin-top: 0;
+          padding: 2px 4px;
+        }
+
+        .top-instrument-section .adjustment-control {
+          grid-template-columns: 29px minmax(0, 1fr) 29px;
+          gap: 4px;
+        }
+
+        .top-instrument-section .adjustment-button {
+          width: 29px;
+          height: 24px;
+          min-height: 24px;
+          font-size: 17px;
+        }
+
+        .top-instrument-section .adjustment-value {
+          font-size: 12px;
+        }
+
+        .top-instrument-section .adjustment-unit,
+        .top-instrument-section .adjustment-inline-label {
+          font-size: 10px;
+        }
+        html,
+        body {
+          width: 100%;
+          min-height: 100%;
+          overflow-x: hidden;
+          overflow-y: auto;
+        }
+
+        body {
+          padding: 6px;
+        }
+
+        .panel {
+          width: min(1180px, 100%);
+          padding: 7px;
+        }
+
+        h1 {
+          margin: 0 0 4px;
+          font-size: 18px;
+          line-height: 1.1;
+        }
+
+        .status {
+          margin-bottom: 5px;
+          font-size: 12px;
+        }
+
+        .instruments-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 5px;
+          margin-bottom: 5px;
+        }
+
+        .instrument-section {
+          padding: 4px 5px 6px;
+          border-radius: 7px;
+        }
+
+        .instrument-wrap {
+          width: min(250px, 100%);
+        }
+
+        .top-instrument-section .instrument-wrap {
+          width: min(315px, 100%);
+        }
+
+        .instrument-corner-readout {
+          top: 6px;
+          min-width: 92px;
+          padding: 4px 6px;
+        }
+
+        .instrument-corner-readout.left {
+          left: 6px;
+        }
+
+        .instrument-corner-readout.right {
+          right: 6px;
+        }
+
+        .corner-readout-label {
+          font-size: 9px;
+          margin-bottom: 2px;
+        }
+
+        .corner-readout-value {
+          font-size: 12px;
+        }
+
+        .corner-readout-unit {
+          font-size: 10px;
+        }
+
+        .instrument-readout {
+          margin-top: -4px;
+          font-size: 12px;
+          line-height: 1.15;
+        }
+
+        .instrument-readout strong {
+          font-size: 16px;
+        }
+
+        #gpsAltitudeRow {
+          margin-top: 2px !important;
+        }
+
+        .instrument-adjustment {
+          margin-top: 4px;
+          padding: 4px 6px;
+          border-radius: 6px;
+        }
+
+        .adjustment-title {
+          font-size: 10px;
+          margin-bottom: 3px;
+        }
+
+        .adjustment-control {
+          grid-template-columns: 34px minmax(68px, 1fr) 34px;
+          gap: 4px;
+        }
+
+        .adjustment-button {
+          width: 34px;
+          height: 30px;
+          border-radius: 6px;
+          font-size: 19px;
+        }
+
+        .adjustment-value {
+          font-size: 15px;
+        }
+
+        .adjustment-unit {
+          font-size: 10px;
+        }
+
+        /*
+         * LAT/LON siguen formando parte de la zona prioritaria.
+         * Se mantienen en dos columnas y se compactan ligeramente.
+         */
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 5px;
+        }
+
+        .grid > .card:nth-child(1),
+        .grid > .card:nth-child(2) {
+          min-height: 54px;
+          padding: 6px 9px;
+        }
+
+        .grid > .card:nth-child(1) .label,
+        .grid > .card:nth-child(2) .label {
+          margin-bottom: 3px;
+          font-size: 10px;
+        }
+
+        .grid > .card:nth-child(1) .value,
+        .grid > .card:nth-child(2) .value {
+          font-size: 21px;
+        }
+
+        .grid > .card:nth-child(1) .unit,
+        .grid > .card:nth-child(2) .unit {
+          font-size: 11px;
+        }
+
+        /*
+         * Temperatura, configuración H/V, G y DataLogger permanecen
+         * con su diseño normal y aparecen al continuar haciendo scroll.
+         */
+      }
+
+
+
+      /* ============================================================
+       * AJUSTE FINAL TABLET / PANEL PRINCIPAL
+       * ============================================================ */
+      .connection-led {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        width: 13px;
+        height: 13px;
+        min-width: 13px;
+        border-radius: 50%;
+        z-index: 35;
+        border: 1px solid rgba(255,255,255,.55);
+        box-shadow: 0 0 7px currentColor;
+      }
+      .connection-led.connected { background: #41d878; color: #41d878; }
+      .connection-led.disconnected { background: #ff4d4d; color: #ff4d4d; }
+
+      .gps-coordinate-card {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .gps-coordinate-card .label { margin: 0; }
+
+      @media (min-width: 700px) and (orientation: landscape) {
+        body {
+          min-height: 100dvh;
+          padding: 4px;
+        }
+        .panel {
+          width: min(1180px, 100%);
+          min-height: 100dvh;
+          padding: 5px;
+          display: flex;
+          flex-direction: column;
+        }
+        h1 {
+          flex: 0 0 auto;
+          margin: 0 0 3px;
+          font-size: 16px;
+          line-height: 1.05;
+        }
+        .instruments-grid {
+          flex: 0 0 auto;
+          height: calc(100dvh - 82px);
+          min-height: 0;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-rows: repeat(2, minmax(0, 1fr));
+          grid-auto-rows: minmax(0, 1fr);
+          gap: 4px;
+          margin: 0 0 4px;
+          align-items: stretch;
+        }
+        .instrument-section,
+        .top-instrument-section,
+        .corner-readout-section,
+        .turn-coordinator-section,
+        .ground-speed-section {
+          height: 100%;
+          min-height: 0;
+          padding: 3px 4px 4px;
+          overflow: hidden;
+          justify-content: flex-start;
+        }
+        /* Un único tamaño base para los seis instrumentos. */
+        .instrument-wrap,
+        .top-instrument-section .instrument-wrap {
+          width: auto;
+          height: calc(100% - 29px);
+          max-width: 100%;
+          max-height: calc(100% - 29px);
+          aspect-ratio: 1;
+          margin: 0 auto;
+          flex: 0 1 auto;
+        }
+        /* VSI, bola y GS no tienen selector inferior: se reserva el mismo
+           espacio para que su círculo no cambie la altura de la tarjeta. */
+        .variometer-section .instrument-wrap,
+        .turn-coordinator-section .instrument-wrap,
+        .ground-speed-section .instrument-wrap {
+          height: calc(100% - 29px);
+          max-height: calc(100% - 29px);
+        }
+        .instrument-corner-readout,
+        .corner-readout-section .instrument-corner-readout {
+          top: 4px;
+          min-width: 86px;
+          padding: 3px 5px;
+        }
+        .instrument-corner-readout.left { left: 4px; }
+        .instrument-corner-readout.right { right: 4px; }
+        .corner-readout-label { font-size: 11px; margin-bottom: 1px; }
+        .corner-readout-value { font-size: 13px; }
+        .corner-readout-unit { font-size: 11px; }
+
+        .top-instrument-section .instrument-adjustment,
+        .heading-section .instrument-adjustment {
+          flex: 0 0 25px;
+          height: 25px;
+          margin-top: 0;
+          padding: 1px 3px;
+        }
+        .top-instrument-section .adjustment-control,
+        .heading-section .adjustment-control {
+          height: 100%;
+          grid-template-columns: 27px minmax(0,1fr) 27px;
+          gap: 3px;
+        }
+        .top-instrument-section .adjustment-button,
+        .heading-section .adjustment-button {
+          width: 27px;
+          height: 21px;
+          min-height: 21px;
+          font-size: 16px;
+        }
+        .top-instrument-section .adjustment-value,
+        .heading-section .adjustment-value { font-size: 13px; }
+        .top-instrument-section .adjustment-unit,
+        .top-instrument-section .adjustment-inline-label,
+        .heading-section .adjustment-unit,
+        .heading-section .adjustment-inline-label { font-size: 11px; }
+
+        /* LAT/LON forman la última franja visible de la tablet. */
+        .grid {
+          flex: 0 0 48px;
+          grid-template-columns: repeat(2, minmax(0,1fr));
+          gap: 4px;
+        }
+        .grid > .gps-coordinate-card:nth-child(1),
+        .grid > .gps-coordinate-card:nth-child(2) {
+          min-height: 0;
+          height: 44px;
+          padding: 4px 8px;
+        }
+        .gps-coordinate-card .label { font-size: 11px; }
+        .gps-coordinate-card .value { font-size: 19px; }
+        .gps-coordinate-card .unit { font-size: 11px; margin-left: 0; }
+
+        /* A partir del tercer elemento de .grid comienza la zona secundaria,
+           accesible mediante scroll. */
+        .grid > .card:nth-child(n+3),
+        .grid > .g-values-row {
+          margin-top: 4px;
+        }
+        .connection-led {
+          left: 7px;
+          bottom: 7px;
+          width: 11px;
+          height: 11px;
+          min-width: 11px;
+        }
+      }
+
+
+      /* ============================================================
+       * FILA INFERIOR PRIORITARIA: LAT / LON / ESTADO ESP32-S3
+       * ============================================================ */
+      .primary-info-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+        margin: 0 0 5px;
+      }
+
+      .primary-info-row .card {
+        min-width: 0;
+      }
+
+      .system-status-card {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+
+      .system-status-card h1 {
+        margin: 0;
+        font-size: clamp(11px, 1.6vw, 16px);
+        line-height: 1.15;
+        font-weight: 700;
+        white-space: normal;
+      }
+
+      /* LED WebSocket algo mayor para lectura rápida. */
+      .connection-led {
+        width: 18px;
+        height: 18px;
+        min-width: 18px;
+        border-width: 2px;
+        box-shadow: 0 0 9px currentColor;
+      }
+
+      @media (min-width: 700px) and (orientation: landscape) {
+        /* Ya no existe una cabecera independiente: ese espacio se entrega
+           a los seis instrumentos. */
+        .instruments-grid {
+          height: calc(100dvh - 61px);
+        }
+
+        .primary-info-row {
+          flex: 0 0 48px;
+          height: 48px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 4px;
+          margin: 0;
+        }
+
+        .primary-info-row .card {
+          min-height: 0;
+          height: 44px;
+          padding: 4px 8px;
+        }
+
+        .primary-info-row .gps-coordinate-card {
+          display: flex;
+          align-items: baseline;
+          justify-content: center;
+          gap: 6px;
+          white-space: nowrap;
+        }
+
+        .primary-info-row .gps-coordinate-card .label {
+          margin: 0;
+          font-size: 11px;
+        }
+
+        .primary-info-row .gps-coordinate-card .value {
+          font-size: 19px;
+        }
+
+        .primary-info-row .gps-coordinate-card .unit {
+          font-size: 11px;
+          margin-left: 0;
+        }
+
+        .system-status-card h1 {
+          font-size: 12px;
+        }
+
+        .connection-led {
+          left: 7px;
+          bottom: 7px;
+          width: 16px;
+          height: 16px;
+          min-width: 16px;
+        }
+
+        /* La antigua .grid contiene ahora únicamente información secundaria
+           y comienza por debajo del viewport prioritario. */
+        .grid {
+          flex: none;
+          margin-top: 4px;
+        }
+      }
+
+      @media (max-width: 699px), (orientation: portrait) {
+        .primary-info-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
     </style>
   </head>
   <body>
     <main class="panel">
-      <h1 id="headerTitle">ESP32-S3 · Esperando fecha/hora GPS...</h1>
-      <div class="status">
-        <span id="connection" class="disconnected">WebSocket desconectado</span>
-      </div>
-
       <section class="instruments-grid" aria-label="Instrumentos de vuelo">
-        <article class="instrument-section" aria-label="Altímetro analógico">
+        <article class="instrument-section top-instrument-section altimeter-section" aria-label="Altímetro analógico">
+          <div class="instrument-corner-readout left" aria-label="Altitud barométrica">
+            <span class="corner-readout-label">Alt. Barométrica</span>
+            <span class="corner-readout-value">
+              <strong id="altitudeFeet">0</strong>
+              <span class="corner-readout-unit">ft</span> ·
+              <strong id="altitudeMeters">0</strong>
+              <span class="corner-readout-unit">m</span>
+            </span>
+          </div>
+
+          <div
+            id="gpsAltitudeRow"
+            class="instrument-corner-readout right"
+            aria-label="Altitud GPS"
+          >
+            <span class="corner-readout-label">Alt GPS</span>
+            <span class="corner-readout-value">
+              <strong id="gpsAltitudeMeters">--</strong>
+              <span class="corner-readout-unit">m</span>
+            </span>
+          </div>
+
           <div class="instrument-wrap">
             <canvas id="altimeter" width="700" height="700"></canvas>
           </div>
-          <div class="instrument-readout">
-            Altitud indicada:
-            <strong id="altitudeFeet">0</strong> ft ·
-            <strong id="altitudeMeters">0</strong> m
-            <div id="gpsAltitudeRow" style="margin-top: 6px">
-              Altitud GPS:
-              <strong id="gpsAltitudeMeters">--</strong> m
-            </div>
-          </div>
           <div class="instrument-adjustment" aria-label="Ajuste de QNH">
-            <div class="adjustment-title">QNH</div>
             <div class="adjustment-control">
               <button
                 id="qnhDown"
@@ -634,7 +1234,7 @@
                 −
               </button>
               <div class="adjustment-value">
-                <span id="qnh">1013.25</span>
+                <span class="adjustment-inline-label">QNH</span><span id="qnh">1013.25</span>
                 <span class="adjustment-unit">hPa</span>
               </div>
               <button
@@ -649,13 +1249,27 @@
           </div>
         </article>
 
-        <article class="instrument-section" aria-label="Variómetro analógico">
+        <article class="instrument-section top-instrument-section variometer-section" aria-label="Variómetro analógico">
           <div class="instrument-wrap">
             <canvas id="variometer" width="700" height="700"></canvas>
           </div>
         </article>
 
-        <article class="instrument-section" aria-label="Horizonte artificial">
+        <article class="instrument-section top-instrument-section horizon-section" aria-label="Horizonte artificial">
+          <div class="instrument-corner-readout left" aria-label="Pitch">
+            <span class="corner-readout-label">Pitch</span>
+            <span class="corner-readout-value">
+              <strong id="horizonPitchDeg">0.00</strong><span class="corner-readout-unit">°</span>
+            </span>
+          </div>
+
+          <div class="instrument-corner-readout right" aria-label="Roll">
+            <span class="corner-readout-label">Roll</span>
+            <span class="corner-readout-value">
+              <strong id="horizonRollDeg">0.00</strong><span class="corner-readout-unit">°</span>
+            </span>
+          </div>
+
           <div class="instrument-wrap">
             <canvas
               id="horizon"
@@ -664,15 +1278,10 @@
               aria-label="Horizonte artificial controlado por pitch y roll"
             ></canvas>
           </div>
-          <div class="instrument-readout">
-            Pitch: <strong id="horizonPitchDeg">0.00</strong>° · Roll:
-            <strong id="horizonRollDeg">0.00</strong>°
-          </div>
           <div
             class="instrument-adjustment"
             aria-label="Ajuste inicial de pitch"
           >
-            <div class="adjustment-title">Ajuste inicial de pitch</div>
             <div class="adjustment-control">
               <button
                 id="pitchOffsetDown"
@@ -683,8 +1292,7 @@
                 −
               </button>
               <div class="adjustment-value">
-                <span id="pitchOffsetDeg">0</span>
-                <span class="adjustment-unit">°</span>
+                <span class="adjustment-inline-label">Ajuste inicial de pitch</span><span id="pitchOffsetDeg">0</span><span class="adjustment-unit">°</span>
               </div>
               <button
                 id="pitchOffsetUp"
@@ -699,9 +1307,17 @@
         </article>
 
         <article
-          class="instrument-section turn-coordinator-section"
+          class="instrument-section turn-coordinator-section corner-readout-section"
           aria-label="Coordinador de viraje y bola"
         >
+          <div class="instrument-corner-readout left">
+            <span class="corner-readout-label">Giro</span>
+            <span class="corner-readout-value"><strong id="turnRateDps">0.00</strong> <span class="corner-readout-unit">°/s</span></span>
+          </div>
+          <div class="instrument-corner-readout right">
+            <span class="corner-readout-label">Bola</span>
+            <span class="corner-readout-value"><strong id="slipBallDeg">0.0</strong><span class="corner-readout-unit">°</span></span>
+          </div>
           <div class="instrument-wrap">
             <svg
               id="turnCoordinator"
@@ -959,13 +1575,13 @@
               </text>
             </svg>
           </div>
-          <div class="instrument-readout">
-            Giro: <strong id="turnRateDps">0.00</strong> °/s · Bola:
-            <strong id="slipBallDeg">0.0</strong>°
-          </div>
         </article>
 
-        <article class="instrument-section" aria-label="Girodireccional">
+        <article class="instrument-section corner-readout-section heading-section" aria-label="Girodireccional">
+          <div class="instrument-corner-readout left">
+            <span class="corner-readout-label">Rumbo indicado</span>
+            <span class="corner-readout-value"><strong id="headingDeg">000</strong><span class="corner-readout-unit">°</span></span>
+          </div>
           <div class="instrument-wrap">
             <div
               class="heading-instrument"
@@ -973,17 +1589,9 @@
               aria-label="Girodireccional controlado por el rumbo"
             >
               <svg id="compassCard" viewBox="0 0 400 400" aria-hidden="true">
-                <circle cx="200" cy="200" r="178" fill="#202020"></circle>
+                <circle cx="200" cy="200" r="198" fill="#202020"></circle>
                 <g id="compassMarks"></g>
                 <g id="compassLabels"></g>
-                <circle
-                  cx="200"
-                  cy="200"
-                  r="177"
-                  fill="none"
-                  stroke="#eeeeee"
-                  stroke-width="2"
-                ></circle>
               </svg>
 
               <div
@@ -1024,33 +1632,27 @@
               <div class="heading-hub"></div>
             </div>
           </div>
-
-          <div class="instrument-readout">
-            Rumbo indicado: <strong id="headingDeg">000</strong>°
-          </div>
           <div
             class="instrument-adjustment"
-            aria-label="Offset del girodireccional"
+            aria-label="Heading manual"
           >
-            <div class="adjustment-title">Offset de rumbo</div>
             <div class="adjustment-control">
               <button
                 id="headingOffsetDown"
                 class="adjustment-button"
                 type="button"
-                aria-label="Reducir offset de rumbo"
+                aria-label="Reducir heading manual"
               >
                 −
               </button>
               <div class="adjustment-value">
-                <span id="headingOffsetDeg">0</span>
-                <span class="adjustment-unit">°</span>
+                <span class="adjustment-inline-label">Heading manual</span><span id="headingOffsetDeg">0</span><span class="adjustment-unit">°</span>
               </div>
               <button
                 id="headingOffsetUp"
                 class="adjustment-button"
                 type="button"
-                aria-label="Aumentar offset de rumbo"
+                aria-label="Aumentar heading manual"
               >
                 +
               </button>
@@ -1059,9 +1661,18 @@
         </article>
 
         <article
-          class="instrument-section ground-speed-section"
+          class="instrument-section ground-speed-section corner-readout-section"
           aria-label="Indicador de Ground Speed"
         >
+          <div class="instrument-corner-readout left">
+            <span class="corner-readout-label">Ground Speed</span>
+            <span class="corner-readout-value"><strong id="groundSpeedKnots">--</strong> <span class="corner-readout-unit">kt</span></span>
+          </div>
+          <div class="instrument-corner-readout right">
+            <span class="corner-readout-label">Ground Speed</span>
+            <span class="corner-readout-value"><strong id="groundSpeedKmh">--</strong> <span class="corner-readout-unit">km/h</span></span>
+          </div>
+          <div id="connection" class="connection-led disconnected" role="status" aria-label="WebSocket desconectado" title="WebSocket desconectado"></div>
           <div class="instrument-wrap">
             <canvas
               id="groundSpeedGauge"
@@ -1071,25 +1682,24 @@
               aria-label="Velocidad respecto al suelo en nudos"
             ></canvas>
           </div>
-          <div class="instrument-readout">
-            Ground Speed:
-            <strong id="groundSpeedKnots">--</strong> kt ·
-            <strong id="groundSpeedKmh">--</strong> km/h
-          </div>
+        </article>
+      </section>
+
+      <section class="primary-info-row" aria-label="GPS y estado del sistema">
+        <article class="card gps-coordinate-card">
+          <span class="label">LAT GPS</span>
+          <span id="gpsLatitude" class="value">--</span><span class="unit">°</span>
+        </article>
+        <article class="card gps-coordinate-card">
+          <span class="label">LON GPS</span>
+          <span id="gpsLongitude" class="value">--</span><span class="unit">°</span>
+        </article>
+        <article class="card system-status-card">
+          <h1 id="headerTitle">ULM-EFIS · Esperando fecha/hora GPS...</h1>
         </article>
       </section>
 
       <section class="grid">
-        <article class="card">
-          <div class="label">LAT GPS</div>
-          <span id="gpsLatitude" class="value">--</span
-          ><span class="unit">°</span>
-        </article>
-        <article class="card">
-          <div class="label">LON GPS</div>
-          <span id="gpsLongitude" class="value">--</span
-          ><span class="unit">°</span>
-        </article>
         <article class="card">
           <div class="label">Temperatura BMP280</div>
           <span id="temperature" class="value">--</span
@@ -1235,9 +1845,7 @@
       let targetHeadingDeg = 0;
       let displayedGroundSpeedKnots = 0;
       let targetGroundSpeedKnots = 0;
-      let gpsTrackDeg = 0;
-      let gpsTrackValid = false;
-      const GPS_TRACK_MIN_SPEED_KT = 5.0;
+      let manualHeadingDeg = 0;
       let currentGroundSpeedKmh = 0;
       let groundSpeedValid = false;
       let targetGCurrent = 0;
@@ -1252,10 +1860,15 @@
       });
 
       function setConnectionState(connected) {
-        connectionElement.textContent = connected
+        connectionElement.className =
+          "connection-led " + (connected ? "connected" : "disconnected");
+        connectionElement.setAttribute(
+          "aria-label",
+          connected ? "WebSocket conectado" : "WebSocket desconectado",
+        );
+        connectionElement.title = connected
           ? "WebSocket conectado"
           : "WebSocket desconectado";
-        connectionElement.className = connected ? "connected" : "disconnected";
         qnhUpButton.disabled = !connected;
         qnhDownButton.disabled = !connected;
         pitchOffsetUpButton.disabled = !connected;
@@ -1674,10 +2287,15 @@
       const hCx = hW / 2;
       const hCy = hH / 2;
 
-      const screenRadius = 365;
-      const bezelOuter = 465;
-      const bezelInner = 407;
-      const pixelsPerDegree = 8.2;
+      /*
+       * Horizonte artificial ampliado:
+       * se elimina visualmente la corona exterior y la esfera móvil aprovecha
+       * casi todo el diámetro disponible del canvas.
+       */
+      const screenRadius = 455;
+      const bezelOuter = 468;
+      const bezelInner = 460;
+      const pixelsPerDegree = 10.2;
       function horizonDegToRad(deg) {
         return (deg * Math.PI) / 180;
       }
@@ -1694,34 +2312,17 @@
       function drawHorizonBezel() {
         horizonCtx.save();
 
-        const g = horizonCtx.createRadialGradient(
-          hCx - 90,
-          hCy - 130,
-          70,
-          hCx,
-          hCy,
-          bezelOuter,
-        );
-        g.addColorStop(0, "#3b3f46");
-        g.addColorStop(0.46, "#1c1f24");
-        g.addColorStop(1, "#07080a");
-
+        /*
+         * Un único aro periférico muy estrecho. Se suprime el grueso bisel
+         * negro/gris original para entregar ese diámetro a la esfera.
+         */
         horizonCtx.beginPath();
         horizonCtx.arc(hCx, hCy, bezelOuter, 0, Math.PI * 2);
-        horizonCtx.fillStyle = g;
-        horizonCtx.fill();
-
-        horizonCtx.lineWidth = 8;
-        horizonCtx.strokeStyle = "#4c5057";
-        horizonCtx.stroke();
-
-        horizonCtx.beginPath();
-        horizonCtx.arc(hCx, hCy, bezelInner, 0, Math.PI * 2);
         horizonCtx.fillStyle = "#050608";
         horizonCtx.fill();
 
-        horizonCtx.lineWidth = 10;
-        horizonCtx.strokeStyle = "#101318";
+        horizonCtx.lineWidth = 6;
+        horizonCtx.strokeStyle = "#34383e";
         horizonCtx.stroke();
 
         horizonCtx.restore();
@@ -1979,7 +2580,6 @@
         drawHorizonMovingSphere(displayedHorizonPitch, displayedHorizonRoll);
         drawHorizonBankScale(displayedHorizonRoll);
         drawHorizonAircraftSymbol();
-        drawHorizonKnob();
       }
 
       const SVG_NS = "http://www.w3.org/2000/svg";
@@ -2049,7 +2649,10 @@
       function updateHeadingInstrument(headingDeg) {
         const normalized = normalizeHeading(headingDeg);
 
-        /* El avión y el índice permanecen fijos; gira la rosa. */
+        /*
+         * La rosa representa el último heading válido del GPS.
+         * Si todavía no ha existido ninguno, websocket.c envía 0°.
+         */
         compassCard.style.transform = `rotate(${-normalized}deg)`;
 
         headingDegElement.textContent = String(
@@ -2057,22 +2660,17 @@
         ).padStart(3, "0");
 
         /*
-         * El track GPS es una trayectoria sobre el suelo. Se representa como
-         * un bug relativo al rumbo indicado del BNO055:
+         * Triángulo amarillo = heading manual persistente.
          *
-         *      angulo_bug = track_GPS - heading_indicado
+         *      angulo_bug = heading_manual - heading_GPS
          *
-         * Con 0 deg queda a las 12; positivo desplaza el bug a la derecha.
+         * Con ambos iguales queda a las 12.
          */
-        if (gpsTrackValid) {
-          let relativeTrack = normalizeHeading(gpsTrackDeg - normalized);
-          if (relativeTrack > 180) relativeTrack -= 360;
+        let relativeManual = normalizeHeading(manualHeadingDeg - normalized);
+        if (relativeManual > 180) relativeManual -= 360;
 
-          gpsTrackBug.style.transform = `rotate(${relativeTrack}deg)`;
-          gpsTrackBug.classList.add("visible");
-        } else {
-          gpsTrackBug.classList.remove("visible");
-        }
+        gpsTrackBug.style.transform = `rotate(${relativeManual}deg)`;
+        gpsTrackBug.classList.add("visible");
       }
 
       const GROUND_SPEED_MIN_KT = 0;
@@ -2442,22 +3040,11 @@
         const gpsLongitude = Number(data.gps_longitude_deg);
         const groundSpeedKnots = Number(data.ground_speed_knots);
         const groundSpeedKmh = Number(data.ground_speed_kmh);
-        const receivedGpsTrackDeg = Number(data.gps_track_deg);
 
         groundSpeedValid =
           gpsValid &&
           Number.isFinite(groundSpeedKnots) &&
           Number.isFinite(groundSpeedKmh);
-
-        gpsTrackValid =
-          gpsValid &&
-          Number.isFinite(receivedGpsTrackDeg) &&
-          Number.isFinite(groundSpeedKnots) &&
-          groundSpeedKnots >= GPS_TRACK_MIN_SPEED_KT;
-
-        if (gpsTrackValid) {
-          gpsTrackDeg = normalizeHeading(receivedGpsTrackDeg);
-        }
 
         targetGroundSpeedKnots = groundSpeedValid
           ? Math.max(
@@ -2515,7 +3102,7 @@
         } else {
           headerTitleElement.textContent = gpsValid
             ? "ESP32-S3 · GPS FIX · Esperando fecha/hora..."
-            : "ESP32-S3 · Esperando fecha/hora GPS...";
+            : "ULM-EFIS · Esperando fecha/hora GPS...";
         }
 
         const temperatureC = Number(data.temperature);
@@ -2538,14 +3125,17 @@
         mountModeHButton.classList.toggle("active", mountMode === 1);
 
         pitchOffsetDegElement.textContent = String(Math.round(pitchOffsetDeg));
-        headingOffsetDegElement.textContent = String(
-          Math.round(normalizeHeading(headingOffsetDeg)),
-        );
 
         /*
-         * Los offsets se almacenan en el ESP32 y se aplican en la interfaz
-         * sobre los datos de actitud recibidos.
+         * Se mantiene el nombre JSON heading_offset_deg para no romper la
+         * interfaz existente, pero desde ahora su significado es un heading
+         * manual absoluto, persistente entre arranques.
          */
+        manualHeadingDeg = normalizeHeading(headingOffsetDeg);
+        headingOffsetDegElement.textContent = String(
+          Math.round(manualHeadingDeg),
+        );
+
         targetHorizonPitch = Math.max(
           -90,
           Math.min(90, Number(data.pitch ?? 0) + pitchOffsetDeg),
@@ -2555,9 +3145,8 @@
           Math.min(180, Number(data.roll ?? 0)),
         );
 
-        targetHeadingDeg = normalizeHeading(
-          Number(data.yaw ?? 0) + headingOffsetDeg,
-        );
+        /* El girodireccional usa exclusivamente el heading GPS retenido. */
+        targetHeadingDeg = normalizeHeading(Number(data.yaw ?? 0));
 
         /* La telemetría entrega altitud en metros y velocidad vertical en m/s. */
         targetAltitudeFeet = Math.max(0, data.altitude * 3.280839895);

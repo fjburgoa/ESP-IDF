@@ -9,7 +9,7 @@
 #        "main.c"
 #        "wifi_ap.c"
 #        "webserver.c"
-#        "websocket.c"
+#       
 #        "BMP280.c"
 #        "MPU6050.c"
        

@@ -1,718 +1,694 @@
-/******************\*\*******************\*\*\*******************\*\*******************
+# ESP32-S3 Electronic Flight Instrument System (EFIS)
 
-- @file main.c
-- @brief ESP32-S3 Electronic Flight Instrument System (EFIS)
--
-- =============================================================================
-- PROJECT DESCRIPTION
-- =============================================================================
--
-- This project implements a low-cost Electronic Flight Instrument System
-- (EFIS) based on the ESP32-S3 microcontroller.
--
-- The ESP32-S3 acquires data from the flight sensors, performs the required
-- signal processing, filtering and flight-parameter calculations, and sends
-- the resulting telemetry through a WebSocket connection to a web browser
-- running on a smartphone, tablet or PC.
--
-- The browser is mainly responsible for graphical representation of the
-- instruments. Sensor processing and flight calculations are performed in
-- the ESP32-S3 so that the values transmitted through the WebSocket already
-- represent the processed flight variables.
--
--
-- =============================================================================
-- SYSTEM ARCHITECTURE
-- =============================================================================
--
--
-- ```
-                 +----------------------+
-  ```
-- ```
-                 |       BMP280         |
-  ```
-- ```
-                 | Pressure / Temp.     |
-  ```
-- ```
-                 +----------+-----------+
-  ```
-- ```
-                            |
-  ```
-- ```
-                            |
-  ```
-- ```
-                 +----------v-----------+
-  ```
-- ```
-                 |       BNO055         |
-  ```
-- ```
-                 |----------------------|
-  ```
-- ```
-                 | Accelerometer        |
-  ```
-- ```
-                 | Gyroscope            |
-  ```
-- ```
-                 | Magnetometer         |
-  ```
-- ```
-                 | NDOF sensor fusion   |
-  ```
-- ```
-                 +----------+-----------+
-  ```
-- ```
-                            |
-  ```
-- ```
-                            |
-  ```
-- ```
-                 +----------v-----------+
-  ```
-- ```
-                 |     GPS / GNSS       |
-  ```
-- ```
-                 |----------------------|
-  ```
-- ```
-                 | Position             |
-  ```
-- ```
-                 | Altitude             |
-  ```
-- ```
-                 | UTC date / time      |
-  ```
-- ```
-                 +----------+-----------+
-  ```
-- ```
-                            |
-  ```
-- ```
-                            v
-  ```
--
-- ```
-              +---------------------------+
-  ```
-- ```
-              |     ESP32-S3 EFIS         |
-  ```
-- ```
-              |---------------------------|
-  ```
-- ```
-              | Barometric altitude       |
-  ```
-- ```
-              | Vertical speed            |
-  ```
-- ```
-              | Pitch / Roll              |
-  ```
-- ```
-              | Heading                   |
-  ```
-- ```
-              | Turn rate                 |
-  ```
-- ```
-              | Slip / Skid               |
-  ```
-- ```
-              | G-meter                   |
-  ```
-- ```
-              | GPS position / altitude   |
-  ```
-- ```
-              | UTC date / time           |
-  ```
-- ```
-              +-------------+-------------+
-  ```
-- ```
-                            |
-  ```
-- ```
-                            |
-  ```
-- ```
-                      JSON Telemetry
-  ```
-- ```
-                            |
-  ```
-- ```
-                            |
-  ```
-- ```
-                     WebSocket (80 ms)
-  ```
-- ```
-                      ~12.5 messages/s
-  ```
-- ```
-                            |
-  ```
-- ```
-                            v
-  ```
--
-- ```
-              +---------------------------+
-  ```
-- ```
-              | Smartphone Web Browser    |
-  ```
-- ```
-              |---------------------------|
-  ```
-- ```
-              | HTML + CSS + JavaScript   |
-  ```
-- ```
-              | Canvas / SVG Rendering    |
-  ```
-- ```
-              +---------------------------+
-  ```
--
--
-- =============================================================================
-- SENSOR PROCESSING
-- =============================================================================
--
-- BMP280
-- ***
--
-- The BMP280 provides:
--
-- - Atmospheric pressure
-- - Temperature
--
-- Barometric altitude is calculated from pressure and the currently selected
-- QNH:
--
-- ```
-   altitude = f(pressure, QNH)
-  ```
--
-- The Vertical Speed Indicator (VSI) is calculated in BMP280.c from the
-- variation of barometric altitude:
--
-- ```
-   vertical_speed = d(altitude) / dt
-  ```
--
-- The resulting vertical speed is filtered with a first-order low-pass filter
-- before being published to the rest of the system.
--
--
-- BNO055
-- ***
--
-- The BNO055 operates in NDOF mode and internally performs sensor fusion using:
--
-- - Accelerometer
-- - Gyroscope
-- - Magnetometer
--
-- The driver provides:
--
-- - Pitch
-- - Roll
-- - Magnetic heading
-- - Angular rates
-- - Linear acceleration
-- - Gravity vector
-- - Magnetic field
-- - Quaternion
--
-- The turn rate used by the Turn Coordinator is calculated from the gyroscope
-- and compensated using the current roll and pitch angles.
--
-- A first-order low-pass filter is applied to the calculated turn rate inside
-- BNO055.c.
--
-- The slip/skid ball is calculated from lateral acceleration. A deadband,
-- gain, saturation and low-pass filtering are applied in BNO055.c before the
-- value is transmitted to the browser.
--
-- Consequently, the web interface does not apply additional filtering to the
-- Turn Coordinator.
--
--
-- GPS / GNSS
-- ***
--
-- The GPS receiver is connected through UART1.
--
-- The driver processes NMEA GGA and RMC sentences and provides:
--
-- - Latitude
-- - Longitude
-- - GPS altitude
-- - Ground speed
-- - Ground track
-- - Fix quality
-- - Number of satellites
-- - HDOP
-- - UTC time
-- - UTC date
--
-- GPS communication validity and navigation FIX validity are treated
-- independently.
--
-- Therefore, UTC date and time may be available and displayed even when the
-- receiver does not yet have a valid navigation FIX.
--
-- Latitude, longitude and GPS altitude are only considered valid when a FIX
-- is available.
--
-- For diagnostic purposes, GPS.c prints the received UTC time to the ESP-IDF
-- serial monitor whenever a valid GGA or RMC sentence is processed.
--
--
-- =============================================================================
-- CURRENT INSTRUMENTS
-- =============================================================================
--
--
-- ***
-- 1. ALTIMETER
-- ***
--
-- Display:
--
-- - Indicated altitude [ft]
-- - Indicated altitude [m]
-- - GPS altitude [m]
--
-- Inputs:
--
-- - BMP280 pressure
-- - User QNH setting
-- - GPS altitude
--
-- Calculated variables:
--
-- - Barometric altitude MSL
-- - Feet conversion
--
-- Configuration stored in NVS:
--
-- - QNH
--
-- GPS altitude is permanently shown in the interface. If no valid GPS FIX is
-- available, "--" is displayed instead of an altitude value.
--
--
-- ***
-- 2. VERTICAL SPEED INDICATOR
-- ***
--
-- Display:
--
-- - Analog vertical-speed needle [ft/min]
--
-- No separate numerical vertical-speed indication is displayed in the web
-- interface.
--
-- Inputs:
--
-- - Barometric altitude calculated by BMP280.c
--
-- Calculated variables:
--
-- - Raw vertical speed:
--
-- ```
-      d(Altitude) / dt
-  ```
--
-- - Filtered vertical speed
--
-- The VSI calculation and filtering are performed in BMP280.c rather than in
-- the browser.
--
--
-- ***
-- 3. ATTITUDE INDICATOR
-- ***
--
-- Display:
--
-- - Pitch
-- - Roll
--
-- Inputs:
--
-- - BNO055 NDOF attitude solution
--
-- Configuration stored in NVS:
--
-- - Pitch offset
--
--
-- ***
-- 4. HEADING INDICATOR
-- ***
--
-- Display:
--
-- - Magnetic heading
--
-- Inputs:
--
-- - BNO055 NDOF heading
--
-- The BNO055 internally combines gyroscope, accelerometer and magnetometer
-- information to obtain the heading solution.
--
-- Configuration stored in NVS:
--
-- - Heading offset
--
--
-- ***
-- 5. TURN COORDINATOR
-- ***
--
-- Display:
--
-- - Turn rate
-- - Slip / Skid ball
--
-- Inputs:
--
-- - BNO055 gyroscope
-- - BNO055 attitude
-- - Lateral acceleration
--
-- Processing:
--
-- - Roll/Pitch compensated turn-rate calculation
-- - Turn-rate low-pass filtering
-- - Slip-ball deadband
-- - Slip-ball low-pass filtering
-- - Slip-ball gain and saturation
--
-- All dynamic filtering is implemented in BNO055.c.
--
-- The HTML interface directly represents the already processed values received
-- through the WebSocket.
--
--
-- ***
-- 6. G-METER
-- ***
--
-- Display:
--
-- - Instantaneous G
-- - Maximum retained G
-- - Minimum retained G
--
-- Inputs:
--
-- - BNO055 accelerometer
--
-- Behaviour:
--
-- - Instantaneous indication
-- - Maximum peak hold
-- - Minimum peak hold
-- - Manual reset from the web interface
--
--
-- ***
-- 7. GPS / GNSS INFORMATION
-- ***
--
-- Display:
--
-- - UTC date
-- - UTC time
-- - Latitude
-- - Longitude
-- - GPS altitude
--
-- Date and time may be displayed without a valid navigation FIX.
--
-- Latitude, longitude and GPS altitude display "--" when the GPS does not have
-- a valid FIX.
--
--
-- =============================================================================
-- VERTICAL SPEED TEST MODE
-- =============================================================================
--
-- Since testing a barometric Vertical Speed Indicator while the system remains
-- stationary is difficult, main.c includes a test altitude generator.
--
-- The test generator produces a triangular altitude waveform with:
--
-- ```
-   Climb rate   = +500 ft/min
-  ```
-- ```
-   Descent rate = -500 ft/min
-  ```
--
-- Equivalent vertical speed:
--
-- ```
-   500 ft/min = 2.54 m/s
-  ```
--
-- The generated fake altitude is passed to the BMP280 vertical-speed
-- processing instead of directly generating a vertical-speed value.
--
-- Therefore the complete VSI processing chain is tested:
--
-- ```
-   Fake altitude
-  ```
-- ```
-        |
-  ```
-- ```
-        v
-  ```
-- ```
-   Altitude derivative
-  ```
-- ```
-        |
-  ```
-- ```
-        v
-  ```
-- ```
-   VSI low-pass filter
-  ```
-- ```
-        |
-  ```
-- ```
-        v
-  ```
-- ```
-   JSON telemetry
-  ```
-- ```
-        |
-  ```
-- ```
-        v
-  ```
-- ```
-   WebSocket
-  ```
-- ```
-        |
-  ```
-- ```
-        v
-  ```
-- ```
-   Analog VSI needle
-  ```
--
-- This allows the complete vertical-speed algorithm to be verified without
-- physically changing the altitude of the instrument.
--
--
-- =============================================================================
-- MAIN SYSTEM VARIABLES
-- =============================================================================
--
-- BMP280 data
-- ***
--
-- pressure_hPa
-- temperature_C
-- altitude_m
-- verticalSpeed_ms
--
--
-- BNO055 data
-- ***
--
-- accelX_g
-- accelY_g
-- accelZ_g
-- accelTotal_g
--
-- gyroX_dps
-- gyroY_dps
-- gyroZ_dps
--
-- magX_uT
-- magY_uT
-- magZ_uT
--
-- pitch_deg
-- roll_deg
-- heading_deg
--
-- turnRate_dps
-- slip_deg
--
-- gCurrent
-- gMax
-- gMin
--
--
-- GPS / GNSS data
-- ***
--
-- gpsConnected
-- gpsFixValid
--
-- gpsLatitude_deg
-- gpsLongitude_deg
-- gpsAltitude_m
--
-- gpsGroundSpeed_knots
-- gpsGroundTrack_deg
--
-- gpsUtcHour
-- gpsUtcMinute
-- gpsUtcSecond
--
-- gpsUtcDay
-- gpsUtcMonth
-- gpsUtcYear
--
--
-- Display / derived variables
-- ***
--
-- altitude_ft
-- verticalSpeed_fpm
--
--
-- Configuration stored in NVS
-- ***
--
-- qnh_hPa
-- pitchOffset_deg
-- headingOffset_deg
--
--
-- =============================================================================
-- SOFTWARE MODULES
-- =============================================================================
--
-- Sensor drivers
-- ***
--
-- BMP280.c
-- ```
-   Pressure, temperature, barometric altitude and VSI calculation.
-  ```
--
-- BNO055.c
-- ```
-   NDOF attitude, heading, turn-rate processing, slip/skid calculation
-  ```
-- ```
-   and G-meter processing.
-  ```
--
-- GPS.c
-- ```
-   UART GNSS interface, NMEA GGA/RMC parser, position and UTC data.
-  ```
--
--
-- Communication
-- ***
--
-- wifi_ap.c
-- ```
-   ESP32-S3 Wi-Fi Access Point.
-  ```
--
-- webserver.c
-- ```
-   HTTP server used to provide the EFIS web interface.
-  ```
--
-- websocket.c
-- ```
-   Periodic JSON telemetry transmission and reception of user commands.
-  ```
--
--
-- User interface
-- ***
--
-- index.html
-- ```
-   Complete graphical EFIS interface using HTML, CSS, Canvas and SVG.
-  ```
--
--
-- Main application
-- ***
--
-- main.c
-- ```
-   System initialization and test-signal generation.
-  ```
--
--
-- =============================================================================
-- COMMUNICATION AND USER SETTINGS
-- =============================================================================
--
-- The ESP32-S3 operates as a Wi-Fi Access Point.
--
-- A smartphone, tablet or PC connects directly to the ESP32-S3 and loads the
-- EFIS web interface from the integrated HTTP server.
--
-- Telemetry is periodically transmitted as JSON through a WebSocket
-- connection.
--
-- The web interface can also send commands to the ESP32-S3 for:
--
-- - QNH increase / decrease
-- - Pitch-offset adjustment
-- - Heading-offset adjustment
-- - G-meter reset
--
-- Persistent user settings are stored in NVS.
--
--
-- =============================================================================
-- FUTURE EXTENSIONS
-- =============================================================================
--
-- - Airspeed indicator
-- - Pitot / static pressure sensor
-- - Density altitude
-- - GPS ground-speed indication
-- - GPS ground-track integration
-- - Flight recorder
-- - SD card logging
-- - Audible alarms
-- - AHRS calibration page
-- - Sensor diagnostics page
-- - Terrain awareness
-- - METAR / QNH acquisition through an Internet-connected device
-- ******************\*\*******************\*\*******************\*\*******************/
+## 1. Descripción general
+
+Este proyecto implementa un EFIS de bajo coste basado en ESP32-S3. El
+microcontrolador adquiere los sensores, realiza el procesamiento,
+filtrado y cálculo de las variables de vuelo y transmite la telemetría
+ya procesada mediante JSON/WebSocket a un navegador en tablet, teléfono
+o PC.
+
+Sensores principales:
+
+-   **BMP280**: presión, temperatura, altitud barométrica y VSI.
+-   **BNO055**: acelerómetro, giróscopo y magnetómetro.
+-   **GPS/GNSS**: posición, UTC, altitud GPS, Ground Speed y Ground
+    Track.
+
+La interfaz presenta actualmente **seis instrumentos principales**. Las
+G mínima, actual y máxima se muestran como texto.
+
+## 2. Arquitectura
+
+``` text
+BMP280 ------------------+
+                         |
+BNO055 ------------------+--> ESP32-S3 --> JSON / WebSocket --> index.html
+                         |
+GPS / GNSS --------------+
+```
+
+El ESP32-S3 calcula o acondiciona: altitud barométrica, velocidad
+vertical, pitch, roll, régimen de giro, bola, G, Ground Speed, Ground
+Track y configuración persistente.
+
+## 3. BNO055: NDOF y AMG
+
+La selección se realiza con `BNO055_USE_INTERNAL_FUSION`.
+
+### NDOF
+
+Con:
+
+``` c
+#define BNO055_USE_INTERNAL_FUSION 1
+```
+
+se utiliza la fusión interna del BNO055. Están disponibles Euler,
+cuaternión, gravedad y aceleración lineal:
+
+``` text
+heading_deg
+roll_deg
+pitch_deg
+quaternion
+gravity_ms2
+linear_acceleration_ms2
+```
+
+Se conserva esta opción para compatibilidad y pruebas.
+
+### AMG --- configuración preferida actual
+
+Con:
+
+``` c
+#define BNO055_USE_INTERNAL_FUSION 0
+```
+
+se leen acelerómetro, giróscopo y magnetómetro sin utilizar la solución
+NDOF. En este modo:
+
+-   pitch y roll se estiman mediante un filtro complementario propio;
+-   el régimen de giro se calcula a partir de los tres ejes del
+    giróscopo;
+-   la componente gravitatoria lateral se elimina por software para
+    calcular la bola;
+-   el heading principal de la interfaz procede del GPS, no del
+    magnetómetro/BNO055.
+
+## 4. Ejes y orientación física
+
+Sistema lógico:
+
+``` text
+X = transversal
+Y = longitudinal
+Z = vertical
+```
+
+Se soportan dos montajes:
+
+-   **V**: P1/default.
+-   **H**: P0, giro de 90° en XY.
+
+Para H/P0:
+
+``` text
+X_aircraft = -Y_sensor
+Y_aircraft =  X_sensor
+Z_aircraft =  Z_sensor
+```
+
+La selección V/H se realiza desde la web, es persistente en NVS y por
+defecto se utiliza V. Al cambiar de orientación se reinician los estados
+del estimador y de los filtros para no mezclar sistemas de referencia.
+
+## 5. Horizonte artificial: ecuaciones de pitch y roll
+
+### 5.1 Estimación con acelerómetro
+
+En AMG se calcula:
+
+$$
+\theta\_a =
+\operatorname{atan2}\left(a_y,\sqrt{a_x^2+a_z^2}\right)
+$$
+
+$$
+\phi\_a =
+\operatorname{atan2}\left(a_x,\sqrt{a_y^2+a_z^2}\right)
+$$
+
+donde (\theta) es pitch y (\phi) es roll.
+
+En C:
+
+``` c
+pitch_acc_deg = atan2f(ay, sqrtf(ax*ax + az*az)) * RAD_TO_DEG;
+roll_acc_deg  = atan2f(ax, sqrtf(ay*ay + az*az)) * RAD_TO_DEG;
+```
+
+### 5.2 Integración del giróscopo
+
+$$
+\theta*g\[k
+$$ = \theta[k-1] +
+S*\theta,\omega\_x,\Delta t \]
+
+$$
+\phi*g\[k
+$$ = \phi[k-1] +
+S*\phi,\omega\_y,\Delta t \]
+
+Actualmente se ha probado:
+
+``` c
+#define BNO055_ROLL_GYRO_SIGN -1.0f
+```
+
+### 5.3 Filtro complementario
+
+$$
+\alpha = \frac{\tau_{att}}{\tau_{att}+\Delta t}
+$$
+
+$$
+\theta[k]=\alpha\theta\_g\[k
+$$+(1-\alpha)\theta\_a$$
+k
+$$
+\]
+
+$$
+\phi[k]=\alpha\phi\_g\[k
+$$+(1-\alpha)\phi\_a$$
+k
+$$
+\]
+
+Valor actual de ensayo:
+
+``` c
+#define BNO055_ATTITUDE_TAU_S 1.0f
+```
+
+El giróscopo proporciona la respuesta rápida y el acelerómetro aporta la
+referencia de vertical a largo plazo.
+
+## 6. Indicador de giro
+
+Usar únicamente `gyro_z_dps` solo es correcto cuando Z coincide con la
+vertical local. Con roll/pitch, el giro alrededor de la vertical se
+reparte entre (\omega\_x,\omega\_y,\omega\_z).
+
+### 6.1 Filtrado previo de los tres giróscopos
+
+Se aplica el mismo LPF de primer orden a X, Y y Z:
+
+$$
+\alpha\_g=1-e\^{-\Delta t/\tau\_g}
+$$
+
+$$
+\omega*{i,f}\[k
+$$= \omega*{i,f}$$
+k-1
+$$+
+\alpha\_g\left(\omega*i$$
+k
+$$-\omega*{i,f}$$
+k-1
+$$\right)
+\]
+
+para (i=x,y,z).
+
+Configuración actual:
+
+``` c
+#define GYRO_FILTER_TAU_S 0.15f
+```
+
+Filtrar los tres ejes con la misma dinámica evita introducir diferencias
+de fase antes de la proyección.
+
+### 6.2 Reconstrucción de la vertical
+
+Las ecuaciones actuales de actitud permiten escribir:
+
+$$
+\hat g_x=\sin\phi
+$$
+
+$$
+\hat g_y=\sin\theta
+$$
+
+y, al ser un vector unitario:
+
+$$
+\hat g_z= \sqrt{1-\hat g_x^2-\hat g_y^2}
+$$
+
+Por tanto:
+
+$$
+\hat{\mathbf g}=
+```
+\begin{bmatrix}
+\sin\phi\\
+\sin\theta\\
+\sqrt{1-\sin^2\phi-\sin^2\theta}
+\end{bmatrix}
+```
+$$
+
+en el rango normal de operación con el equipo aproximadamente erguido.
+
+### 6.3 Proyección de la velocidad angular
+
+$$
+\boldsymbol{\omega}\_f=
+```
+\begin{bmatrix}
+\omega_{x,f}\\
+\omega_{y,f}\\
+\omega_{z,f}
+\end{bmatrix}
+```
+$$
+
+La componente alrededor de la vertical local es:
+
+$$
+\omega\_v=
+\boldsymbol{\omega}\_f\cdot\hat{\mathbf g}
+$$
+
+es decir:
+
+$$
+`\boxed{
+\omega_v=
+\omega_{x,f}\sin\phi+
+\omega_{y,f}\sin\theta+
+\omega_{z,f}
+\sqrt{1-\sin^2\phi-\sin^2\theta}
+}`
+$$
+
+El signo final se adapta únicamente a la convención gráfica del
+instrumento.
+
+### 6.4 Filtrado final del régimen de giro
+
+Después de la proyección se mantiene un segundo LPF:
+
+$$
+\alpha\_t=1-e\^{-\Delta t/\tau\_t}
+$$
+
+$$
+\omega*{turn}\[k
+$$= \omega*{turn}$$
+k-1
+$$+
+\alpha\_t(\omega*v$$
+k
+$$-\omega*{turn}$$
+k-1
+$$) \]
+
+con:
+
+``` c
+#define TURN_RATE_FILTER_TAU_S 0.75f
+#define TURN_RATE_DEADBAND_DPS 0.10f
+```
+
+Cadena completa:
+
+``` text
+gyro XYZ
+   |
+LPF XYZ, tau = 0.15 s
+   |
+proyección sobre vertical estimada
+   |
+deadband
+   |
+LPF turn-rate, tau = 0.75 s
+   |
+indicador de giro
+```
+
+## 7. Bola de resbale/deslizamiento
+
+En AMG ya no disponemos directamente de `linear_acceleration_ms2`
+calculada por la fusión NDOF. La bola debe responder a la **aceleración
+lateral no gravitatoria**, no a `accel_x_g` total.
+
+El acelerómetro mide:
+
+$$
+a\_{x,meas}=a\_{x,linear}+g_x
+$$
+
+Con X transversal y la convención actual de roll:
+
+$$
+g\_{x,g}=\sin\phi
+$$
+
+por lo que:
+
+$$
+`\boxed{
+a_{lat,g}=a_{x,g}-\sin\phi
+}`
+$$
+
+Esta magnitud reconstruye por software el equivalente de la componente X
+de `linear_acceleration_ms2`, expresada en G.
+
+El ángulo equivalente de bola se obtiene mediante:
+
+$$
+`\boxed{
+\beta=\arctan(a_{lat,g})
+}`
+$$
+
+Ejemplos:
+
+``` text
+0.0 G ->  0.00 deg
+0.1 G ->  5.71 deg
+0.2 G -> 11.31 deg
+```
+
+Después se aplican signo gráfico, deadband, LPF y saturación:
+
+``` c
+#define SLIP_BALL_FILTER_TAU_S 1.5f
+#define SLIP_BALL_LIMIT_DEG 25.0f
+#define SLIP_BALL_DEADBAND_DEG 0.8f
+```
+
+La llamada actual conceptualmente es:
+
+``` c
+bno055_compute_slip_ball_deg(
+    data.accel_x_g,
+    data.roll_deg,
+    dt_s);
+```
+
+## 8. G-meter
+
+La G actual se calcula como módulo del vector del acelerómetro:
+
+$$
+`\boxed{
+G=\sqrt{G_x^2+G_y^2+G_z^2}
+}`
+$$
+
+`Gmin` y `Gmax` son los mínimos y máximos absolutos acumulados desde el
+último reset.
+
+En la interfaz se muestran en una única línea:
+
+``` text
+Gmin (verde) - G actual (blanco) - Gmax (azul)
+```
+
+El antiguo instrumento analógico de G fue sustituido por el Ground
+Speed.
+
+## 9. BMP280: altitud y VSI
+
+El BMP280 proporciona presión y temperatura. La altitud se obtiene a
+partir de presión y QNH:
+
+$$
+h=f(P,QNH)
+$$
+
+El VSI se calcula en `BMP280.c`:
+
+$$
+v_z=\frac{dh}{dt}
+$$
+
+y se filtra antes de enviarlo al navegador.
+
+## 10. GPS/GNSS
+
+El GPS proporciona:
+
+-   latitud y longitud;
+-   altitud GPS;
+-   Ground Speed;
+-   Ground Track / Course Over Ground;
+-   FIX;
+-   satélites y HDOP;
+-   UTC fecha/hora.
+
+La validez de comunicaciones y la validez del FIX se tratan por
+separado.
+
+### Ground Speed
+
+Existe un instrumento analógico dedicado **GS**, en knots, con leyenda
+`KNOTS`. Funciona a partir de la velocidad GPS.
+
+### Girodireccional / Ground Track
+
+El girodireccional utiliza ahora el **Ground Track del GPS**, no el
+heading de la IMU.
+
+Una muestra nueva se acepta únicamente cuando el GPS tiene información
+válida y la velocidad es suficientemente alta para que el
+course-over-ground sea significativo. Si se pierde temporalmente el
+heading GPS:
+
+1.  se conserva el último Ground Track válido;
+2.  si nunca se recibió uno válido, se muestra 0°.
+
+Técnicamente el GPS proporciona track/course over ground, no el heading
+aerodinámico del vehículo.
+
+### Triángulo amarillo / course bug
+
+El triángulo amarillo es un heading/course manual seleccionado por el
+usuario mediante `+` y `-` y almacenado de forma persistente.
+
+Su posición relativa es:
+
+$$
+`\boxed{
+\Delta\psi=
+\psi_{manual}-\psi_{GPS}
+}`
+$$
+
+Cuando ambos coinciden, el triángulo queda a las 12.
+
+Por compatibilidad, la variable interna puede conservar el nombre
+histórico `heading_offset_deg`, aunque actualmente representa un valor
+manual absoluto.
+
+## 11. Seis instrumentos principales actuales
+
+1.  **Altímetro**: altitud barométrica ft/m y altitud GPS.
+2.  **VSI**: velocidad vertical barométrica filtrada.
+3.  **Horizonte artificial**: pitch y roll calculados en AMG mediante
+    filtro complementario.
+4.  **Girodireccional**: Ground Track GPS + course bug amarillo manual.
+5.  **Bola y bastón / Turn Coordinator**: régimen de giro y bola.
+6.  **Ground Speed**: velocidad GPS en knots.
+
+Además se muestran Gmin/G/Gmax, UTC, latitud/longitud y otra información
+de diagnóstico/configuración.
+
+## 12. Diseño de la interfaz para tablet
+
+La zona prioritaria de la página incluye los seis instrumentos y los
+datos de navegación hasta latitud/longitud.
+
+Información menos prioritaria, como temperatura, diagnóstico y selección
+de orientación, puede quedar por debajo del viewport y accederse
+mediante scroll. Esto evita reducir excesivamente el tamaño de los
+instrumentos en tablets con barra de navegación visible.
+
+El contador, mensajes/s y tiempo se agrupan de forma compacta en el
+borde de la interfaz.
+
+## 13. Configuración persistente
+
+Actualmente se contemplan, según la build:
+
+-   QNH;
+-   pitch offset;
+-   heading/course manual;
+-   orientación BNO055 V/H.
+
+Los parámetros se almacenan en NVS.
+
+## 14. Datalogger
+
+La infraestructura del datalogger se conserva, pero su funcionalidad C
+puede desactivarse mediante una opción de compilación en `config.h`.
+
+Las partes visuales de `index.html` y campos JSON asociados pueden
+permanecer aunque el logger esté desactivado. De esta forma no es
+necesario eliminar código para realizar ensayos sin adquisición de
+datos.
+
+## 15. Variables principales
+
+### BMP280
+
+``` text
+pressure_hPa
+temperature_C
+altitude_m
+verticalSpeed_ms
+```
+
+### BNO055 / inerciales
+
+``` text
+accelX_g
+accelY_g
+accelZ_g
+accelTotal_g
+
+gyroX_dps
+gyroY_dps
+gyroZ_dps
+
+magX_uT
+magY_uT
+magZ_uT
+
+pitch_deg
+roll_deg
+heading_deg
+
+turnRate_dps
+slip_deg
+
+gCurrent
+gMax
+gMin
+```
+
+En NDOF también pueden existir:
+
+``` text
+quaternion
+gravity_ms2
+linear_acceleration_ms2
+```
+
+En AMG esos datos fusionados no se utilizan; las magnitudes necesarias
+se reconstruyen localmente.
+
+### GPS
+
+``` text
+gpsConnected
+gpsFixValid
+gpsLatitude_deg
+gpsLongitude_deg
+gpsAltitude_m
+gpsGroundSpeed_knots
+gpsGroundTrack_deg
+gpsUtcHour
+gpsUtcMinute
+gpsUtcSecond
+gpsUtcDay
+gpsUtcMonth
+gpsUtcYear
+```
+
+## 16. Módulos de software
+
+-   `BMP280.c`: presión, temperatura, altitud y VSI.
+-   `BNO055.c`: configuración/remapeo, AMG/NDOF, adquisición inercial,
+    filtro complementario, filtrado gyro XYZ, turn-rate, bola y G-meter.
+-   `GPS.c`: UART/NMEA, posición, UTC, Ground Speed y Ground Track.
+-   `wifi_ap.c`: Access Point ESP32-S3.
+-   `webserver.c`: servidor HTTP.
+-   `websocket.c`: telemetría JSON, comandos, persistencia y lógica de
+    heading GPS.
+-   `index.html`: representación gráfica del EFIS.
+-   `main.c`: inicialización.
+-   `config.h`: opciones de compilación, incluyendo fusión BNO055 y
+    datalogger.
+
+## 17. Resumen del procesamiento
+
+``` text
+ACCEL + GYRO X/Y
+       |
+       v
+filtro complementario
+       |
+       +--------------------> pitch / roll
+
+GYRO X/Y/Z
+       |
+       v
+LPF tau=0.15 s
+       |
+       v
+proyección sobre vertical estimada
+       |
+       v
+deadband + LPF tau=0.75 s
+       |
+       +--------------------> indicador de giro
+
+ACCEL X + roll
+       |
+       v
+accel_x_g - sin(roll)
+       |
+       v
+atan()
+       |
+       v
+deadband + LPF + saturación
+       |
+       +--------------------> bola
+
+GPS Ground Speed ----------> GS
+GPS Ground Track ----------> girodireccional
+Heading manual ------------> triángulo amarillo
+
+BMP280 P --> altitud --> derivada --> LPF --> VSI
+```
+
+## 18. Estado de validación
+
+Pruebas realizadas en estático y en automóvil:
+
+-   altitud barométrica: buen comportamiento;
+-   VSI: buen comportamiento;
+-   GS GPS: muy buen comportamiento;
+-   Ground Track GPS en girodireccional: buen comportamiento;
+-   indicador de giro: funcional, actualmente en ajuste de filtrado;
+-   horizonte: se ha abandonado provisionalmente la dependencia de Euler
+    NDOF y se está validando el estimador AMG propio;
+-   bola: revisada para eliminar la componente lateral de gravedad antes
+    de representar aceleración lateral;
+-   se prevé probar un GPS de mayor frecuencia de actualización.
+
+Las pruebas en automóvil son útiles para desarrollo, pero las dinámicas
+de un coche no son equivalentes a las de una aeronave, especialmente en
+régimen de giro, peralte, pitch/roll y aceleración lateral.
+
+## 19. Pendiente
+
+-   validar en carretera el filtro complementario AMG con `tau = 1.0 s`;
+-   ajustar definitivamente `GYRO_FILTER_TAU_S` y
+    `TURN_RATE_FILTER_TAU_S`;
+-   validar físicamente el signo y dinámica de la bola;
+-   validar la reconstrucción de aceleración lateral lineal;
+-   probar el GPS de mayor frecuencia;
+-   futura entrada pitot/estática para airspeed;
+-   density altitude;
+-   alarmas;
+-   diagnóstico/calibración;
+-   terrain awareness;
+-   reactivar/ampliar el datalogger cuando vuelva a ser necesario.
+
+## 20. Herramienta útil
+
+ESPConnect:
 
 https://thelastoutpostworkshop.github.io/ESPConnect/
