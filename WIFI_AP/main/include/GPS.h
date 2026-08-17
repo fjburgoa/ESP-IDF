@@ -32,14 +32,12 @@ typedef struct
     uint8_t satellites;
     float hdop;
 
-    uint8_t utc_hour;
-    uint8_t utc_minute;
-    uint8_t utc_second;
-    uint16_t utc_millisecond;
-
-    uint8_t utc_day;
-    uint8_t utc_month;
-    uint16_t utc_year;
+    /*
+     * Fecha y hora UTC compactadas como Unix timestamp:
+     * segundos transcurridos desde 1970-01-01 00:00:00 UTC.
+     * Valor 0 = fecha/hora UTC todavía no disponible.
+     */
+    uint32_t utc_timestamp;
 
     uint32_t baud_rate;
     uint32_t received_sentences;

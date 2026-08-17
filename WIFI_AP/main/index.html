@@ -3073,35 +3073,32 @@
             ? gpsLongitude.toFixed(6)
             : "--";
 
-        const day = Number(data.gps_utc_day);
-        const month = Number(data.gps_utc_month);
-        const year = Number(data.gps_utc_year);
-        const hour = Number(data.gps_utc_hour);
-        const minute = Number(data.gps_utc_minute);
-        const second = Number(data.gps_utc_second);
-
+        /*
+         * El ESP32-S3 envía la fecha/hora GPS compactada como Unix timestamp
+         * UTC [s]. El navegador se encarga de convertirla a calendario.
+         */
+        const utcTimestamp = Number(data.gps_utc);
         const utcValid =
-          day >= 1 &&
-          day <= 31 &&
-          month >= 1 &&
-          month <= 12 &&
-          year >= 2000 &&
-          hour >= 0 &&
-          hour <= 23 &&
-          minute >= 0 &&
-          minute <= 59 &&
-          second >= 0 &&
-          second <= 60;
+          Number.isInteger(utcTimestamp) && utcTimestamp > 0;
 
         if (utcValid) {
+          const utcDate = new Date(utcTimestamp * 1000);
           const pad2 = (value) => String(value).padStart(2, "0");
+
+          const day = utcDate.getUTCDate();
+          const month = utcDate.getUTCMonth() + 1;
+          const year = utcDate.getUTCFullYear();
+          const hour = utcDate.getUTCHours();
+          const minute = utcDate.getUTCMinutes();
+          const second = utcDate.getUTCSeconds();
+
           headerTitleElement.textContent =
-            `ESP32-S3 · ${pad2(day)}/${pad2(month)}/${year} ` +
+            `ULM-EFIS · ${pad2(day)}/${pad2(month)}/${year} ` +
             `${pad2(hour)}:${pad2(minute)}:${pad2(second)} UTC · ` +
             (gpsValid ? "GPS FIX" : "GPS SIN FIX");
         } else {
           headerTitleElement.textContent = gpsValid
-            ? "ESP32-S3 · GPS FIX · Esperando fecha/hora..."
+            ? "ULM-EFIS · GPS FIX · Esperando fecha/hora..."
             : "ULM-EFIS · Esperando fecha/hora GPS...";
         }
 

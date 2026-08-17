@@ -5,7 +5,7 @@
  * Formato CSV:
  *
  *   utc,accel_z_ms2
- *   2026-08-12T18:23:01.000Z,9.80742
+ *   2026-08-12T18:23:01Z,9.80742
  *
  * Se registra una muestra por segundo. Después de cada fprintf() se ejecuta
  * fflush(), de modo que ante una pérdida de alimentación las muestras previas
@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "BNO055.h"
 #include "BMP280.h"
@@ -129,14 +130,7 @@ static bool datalogger_utc_valid(const gps_data_t *gps)
     }
 
     return gps->fix_valid &&
-           (gps->utc_year >= 2000U) &&
-           (gps->utc_month >= 1U) &&
-           (gps->utc_month <= 12U) &&
-           (gps->utc_day >= 1U) &&
-           (gps->utc_day <= 31U) &&
-           (gps->utc_hour <= 23U) &&
-           (gps->utc_minute <= 59U) &&
-           (gps->utc_second <= 60U);
+           (gps->utc_timestamp > 0U);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -172,16 +166,20 @@ static void datalogger_task(void *pvParameters)
             {
                 if (s_recording && (s_file != NULL))
                 {
+                    const time_t utc_time = (time_t)gps.utc_timestamp;
+                    struct tm utc_tm = {0};
+
+                    gmtime_r(&utc_time, &utc_tm);
+
                     const int written = fprintf(
                         s_file,
-                        "%04u-%02u-%02uT%02u:%02u:%02u.%03uZ;%.5f;%.2f;\n",
-                        gps.utc_year,
-                        gps.utc_month,
-                        gps.utc_day,
-                        gps.utc_hour,
-                        gps.utc_minute,
-                        gps.utc_second,
-                        gps.utc_millisecond,
+                        "%04d-%02d-%02dT%02d:%02d:%02dZ;%.5f;%.2f;\n",
+                        utc_tm.tm_year + 1900,
+                        utc_tm.tm_mon + 1,
+                        utc_tm.tm_mday,
+                        utc_tm.tm_hour,
+                        utc_tm.tm_min,
+                        utc_tm.tm_sec,
                         (double)imu.acceleration_ms2.z,
                         (double)pressure_hpa);
 
@@ -297,17 +295,11 @@ esp_err_t DataLogger_begin_recording(void)
     ESP_LOGI(TAG,
              "Estado previo a grabación: "
              "IMU=%d FIX=%d GPSvalid=%d "
-             "UTC=%04u-%02u-%02u %02u:%02u:%02u.%03u",
+             "UTC timestamp=%" PRIu32,
              imu.valid,
              gps.fix_valid,
              gps.valid,
-             gps.utc_year,
-             gps.utc_month,
-             gps.utc_day,
-             gps.utc_hour,
-             gps.utc_minute,
-             gps.utc_second,
-             gps.utc_millisecond);
+             gps.utc_timestamp);
 
     if (!imu.valid)
     {

@@ -21,6 +21,8 @@ idf_component_register(
         "websocket.c"
         "BMP280.c"
         "BNO055.c"
+        "BNO055_driver.c"
+        "BNO055_processing.c"
         "GPS.c"
         "DataLogger.c"
 

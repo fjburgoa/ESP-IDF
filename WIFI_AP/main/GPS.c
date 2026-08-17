@@ -924,6 +924,72 @@ static bool gps_parse_utc_time(
 
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Convierte una fecha/hora UTC de calendario a Unix timestamp sin depender
+ * del huso horario ni de timegm()/mktime().
+ *
+ * El algoritmo calcula primero el número de días transcurridos desde
+ * 1970-01-01 y después añade hora, minuto y segundo.
+ */
+static bool gps_utc_to_timestamp(
+    uint16_t year,
+    uint8_t month,
+    uint8_t day,
+    uint8_t hour,
+    uint8_t minute,
+    uint8_t second,
+    uint32_t *timestamp)
+{
+    if ((timestamp == NULL) ||
+        (year < 1970U) ||
+        (month < 1U) || (month > 12U) ||
+        (day < 1U) || (day > 31U) ||
+        (hour > 23U) ||
+        (minute > 59U) ||
+        (second > 60U))
+    {
+        return false;
+    }
+
+    int32_t y = (int32_t)year;
+    const int32_t m = (int32_t)month;
+    const int32_t d = (int32_t)day;
+
+    y -= (m <= 2);
+
+    const int32_t era = (y >= 0 ? y : y - 399) / 400;
+    const uint32_t yoe = (uint32_t)(y - era * 400);
+    const uint32_t mp = (uint32_t)(m + (m > 2 ? -3 : 9));
+    const uint32_t doy =
+        (153U * mp + 2U) / 5U + (uint32_t)d - 1U;
+    const uint32_t doe =
+        yoe * 365U + yoe / 4U - yoe / 100U + doy;
+
+    const int64_t days =
+        (int64_t)era * 146097LL + (int64_t)doe - 719468LL;
+
+    if (days < 0)
+    {
+        return false;
+    }
+
+    const uint64_t seconds =
+        (uint64_t)days * 86400ULL +
+        (uint64_t)hour * 3600ULL +
+        (uint64_t)minute * 60ULL +
+        (uint64_t)second;
+
+    if (seconds > UINT32_MAX)
+    {
+        return false;
+    }
+
+    *timestamp = (uint32_t)seconds;
+    return true;
+}
+
+/* -------------------------------------------------------------------------- */
+
 static bool gps_parse_coordinate(
     const char *value,
     const char *hemisphere,
@@ -969,12 +1035,17 @@ static bool gps_parse_gga(char *line)
 
     gps_data_t update = GPS_get_data();
 
-    gps_parse_utc_time(
+    uint8_t utc_hour = 0U;
+    uint8_t utc_minute = 0U;
+    uint8_t utc_second = 0U;
+    uint16_t utc_millisecond = 0U;
+
+    (void)gps_parse_utc_time(
         fields[1],
-        &update.utc_hour,
-        &update.utc_minute,
-        &update.utc_second,
-        &update.utc_millisecond);
+        &utc_hour,
+        &utc_minute,
+        &utc_second,
+        &utc_millisecond);
 
     gps_parse_coordinate(
         fields[2],
@@ -1023,10 +1094,10 @@ static bool gps_parse_gga(char *line)
     ESP_LOGI(
         TAG,
         "GGA UTC %02u:%02u:%02u.%03u | FIX=%s",
-        update.utc_hour,
-        update.utc_minute,
-        update.utc_second,
-        update.utc_millisecond,
+        utc_hour,
+        utc_minute,
+        utc_second,
+        utc_millisecond,
         update.fix_valid ? "SI" : "NO");
 
     */
@@ -1048,12 +1119,17 @@ static bool gps_parse_rmc(char *line)
 
     gps_data_t update = GPS_get_data();
 
-    gps_parse_utc_time(
+    uint8_t utc_hour = 0U;
+    uint8_t utc_minute = 0U;
+    uint8_t utc_second = 0U;
+    uint16_t utc_millisecond = 0U;
+
+    (void)gps_parse_utc_time(
         fields[1],
-        &update.utc_hour,
-        &update.utc_minute,
-        &update.utc_second,
-        &update.utc_millisecond);
+        &utc_hour,
+        &utc_minute,
+        &utc_second,
+        &utc_millisecond);
 
     const bool rmc_valid =
         fields[2][0] == 'A';
@@ -1086,15 +1162,29 @@ static bool gps_parse_rmc(char *line)
         char mm[3] = {fields[9][2], fields[9][3], '\0'};
         char yy[3] = {fields[9][4], fields[9][5], '\0'};
 
-        update.utc_day =
+        const uint8_t utc_day =
             (uint8_t)strtoul(dd, NULL, 10);
 
-        update.utc_month =
+        const uint8_t utc_month =
             (uint8_t)strtoul(mm, NULL, 10);
 
-        update.utc_year =
+        const uint16_t utc_year =
             (uint16_t)(2000U +
                        (uint16_t)strtoul(yy, NULL, 10));
+
+        uint32_t utc_timestamp = 0U;
+
+        if (gps_utc_to_timestamp(
+                utc_year,
+                utc_month,
+                utc_day,
+                utc_hour,
+                utc_minute,
+                utc_second,
+                &utc_timestamp))
+        {
+            update.utc_timestamp = utc_timestamp;
+        }
     }
 
     update.fix_valid =
@@ -1119,17 +1209,11 @@ static bool gps_parse_rmc(char *line)
      * Se imprime aunque el estado RMC sea V (sin FIX válido).
      */
     /*
-        ESP_LOGI(
-            TAG,
-            "RMC UTC %02u/%02u/%04u %02u:%02u:%02u.%03u | FIX=%s",
-            update.utc_day,
-            update.utc_month,
-            update.utc_year,
-            update.utc_hour,
-            update.utc_minute,
-            update.utc_second,
-            update.utc_millisecond,
-            update.fix_valid ? "SI" : "NO");
+    ESP_LOGI(
+        TAG,
+        "RMC UTC timestamp=%" PRIu32 " | FIX=%s",
+        update.utc_timestamp,
+        update.fix_valid ? "SI" : "NO");
     */
     return true;
 }

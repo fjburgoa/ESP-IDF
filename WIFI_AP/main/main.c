@@ -133,7 +133,7 @@ void app_main(void)
     }
 
     /*
-     * GPS por UART1. Se arranca después de los sensores I2C para mantener
+     * GPS por UART1. Se arranca antes de los sensores I2C para mantener
      * el arranque secuencial que ha resultado estable.
      */
 

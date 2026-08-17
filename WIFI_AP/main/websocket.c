@@ -23,7 +23,8 @@
 /* Añadir también a BMP280.h cuando se consolide la interfaz del driver. */
 extern float vertical_speed;
 
-#define TELEMETRY_PERIOD_MS 100U // 10 Hz
+// #define TELEMETRY_PERIOD_MS 100U // 10 Hz
+#define TELEMETRY_PERIOD_MS 66U // ~15 Hz
 #define MAX_WS_CLIENTS 4U
 #define JSON_BUFFER_SIZE 1600U
 
@@ -637,8 +638,11 @@ static void telemetry_task(void *arg)
             s_last_gps_heading_valid = true;
         }
 
-        // const float yaw = s_last_gps_heading_valid ? s_last_gps_heading_deg : 0.0f;   //  ###GPS###
+#if HEADING_GPS
+        const float yaw = s_last_gps_heading_valid ? s_last_gps_heading_deg : 0.0f; //  ###GPS###
+#else
         const float yaw = imu.valid ? imu.heading_deg : 0.0f; //  ###DEMO###
+#endif
 
         /*
          * altitude y vertical_speed proceden de BMP280.c.
@@ -650,8 +654,7 @@ static void telemetry_task(void *arg)
          * Avión del coordinador:
          * velocidad de cambio de rumbo compensada por roll y pitch.
          */
-        const float turn_rate_dps =
-            imu.valid ? imu.yaw_rate_dps : 0.0f;
+        const float turn_rate_dps = imu.valid ? imu.yaw_rate_dps : 0.0f;
 
         /*
          * Bola del coordinador:
@@ -737,12 +740,7 @@ static void telemetry_task(void *arg)
                 "\"ground_speed_knots\":%.2f," // Ground Speed [kt]
                 "\"ground_speed_kmh\":%.2f,"   // Ground Speed [km/h]
                 "\"gps_track_deg\":%.2f,"      // Track GPS sobre el suelo [deg]
-                "\"gps_utc_day\":%u,"          // Día UTC
-                "\"gps_utc_month\":%u,"        // Mes UTC
-                "\"gps_utc_year\":%u,"         // Año UTC
-                "\"gps_utc_hour\":%u,"         // Hora UTC
-                "\"gps_utc_minute\":%u,"       // Minuto UTC
-                "\"gps_utc_second\":%u,"       // Segundo UTC
+                "\"gps_utc\":%" PRIu32 ","     // Unix timestamp UTC [s]
 
                 /*----------------------------------------------------------*/
                 /* DataLogger SPIFFS                                        */
@@ -810,12 +808,7 @@ static void telemetry_task(void *arg)
                 (double)(gps.fix_valid ? gps.ground_speed_knots : 0.0f),
                 (double)(gps.fix_valid ? gps.ground_speed_kmh : 0.0f),
                 (double)(gps.fix_valid ? gps.ground_track_deg : 0.0f), // gps
-                gps.utc_day,
-                gps.utc_month,
-                gps.utc_year,
-                gps.utc_hour,
-                gps.utc_minute,
-                gps.utc_second,
+                gps.utc_timestamp,
                 logger.recording ? "true" : "false",
                 logger.file_available ? "true" : "false",
                 logger.samples,
@@ -833,9 +826,9 @@ static void telemetry_task(void *arg)
                 (double)imu.accel_y_g,
                 (double)imu.accel_z_g,
                 (double)imu.accel_total_g,
-                (double)imu.gyro_x_dps,
-                (double)imu.gyro_y_dps,
-                (double)imu.gyro_z_dps,
+                (double)imu.gyro_dps.x,
+                (double)imu.gyro_dps.y,
+                (double)imu.gyro_dps.z,
                 (double)imu.yaw_rate_dps,
                 imu.valid ? "true" : "false");
 

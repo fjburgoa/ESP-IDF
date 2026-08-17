@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "wifi_softAP",
-    "project_version":    "7102088ea-dirty",
+    "project_version":    "af021bee2-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.2/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/build",
@@ -850,7 +850,7 @@
             "managed_reqs": [],
             "managed_priv_reqs": [],
             "file": "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/build/esp-idf/main/libmain.a",
-            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/main.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/wifi_ap.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/webserver.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/websocket.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/BMP280.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/BNO055.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/GPS.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/DataLogger.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/build/index.html.S" ],
+            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/main.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/wifi_ap.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/webserver.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/websocket.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/BMP280.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/BNO055.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/BNO055_driver.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/BNO055_processing.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/GPS.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/main/DataLogger.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/WIFI_AP/build/index.html.S" ],
             "include_dirs": [ "include" ]
         },
         "mbedtls": {
