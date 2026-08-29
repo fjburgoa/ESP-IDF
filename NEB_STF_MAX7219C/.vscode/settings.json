@@ -3,18 +3,22 @@
   "idf.espIdfPathWin": "C:\\Users\\fjbur\\esp\\v5.5.2\\esp-idf",
   "idf.pythonInstallPath": "C:\\Users\\fjbur\\esp\\tools\\tools\\idf-python\\3.11.2\\python.exe",
   "idf.openOcdConfigs": [
-    "board/esp32s3-bridge.cfg"
+    "board/esp32s3-builtin.cfg"
   ],
   "idf.portWin": "COM18",
   "idf.toolsPathWin": "C:\\Users\\fjbur\\esp\\tools\\",
   "idf.customExtraVars": {
+    "OPENOCD_SCRIPTS": "c:\\Espressif\\frameworks\\esp-idf-v5.3.1\\tools\\tools\\openocd-esp32\\v0.12.0-esp32-20240318/openocd-esp32/share/openocd/scripts",
+    "IDF_CCACHE_ENABLE": "1",
+    "ESP_ROM_ELF_DIR": "c:\\Espressif\\frameworks\\esp-idf-v5.3.1\\tools\\tools\\esp-rom-elfs\\20240305/",
     "IDF_TARGET": "esp32s3"
   },
   "clangd.path": "C:\\Users\\fjbur\\esp\\tools\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
   "clangd.arguments": [
     "--background-index",
     "--query-driver=**",
-    "--compile-commands-dir=c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_programs\\NEB_STF_3642BS_1\\build"
+    "--compile-commands-dir=c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_programs\\NEB_STF_MAX7219C\\build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "JTAG",
+  "idf.currentSetup": "C:\\Users\\fjbur\\esp\\v5.5.2\\esp-idf"
 }

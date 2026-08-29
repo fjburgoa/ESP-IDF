@@ -43,7 +43,8 @@
 
 #define BNO055_CHIP_ID_VALUE 0xA0
 #define BNO055_MODE_CONFIG 0x00
-#define BNO055_MODE_NDOF 0x0C
+#define BNO055_MODE_NDOF 0x0C    // NDOF
+#define BNO055_MODE_ACCONLY 0x01 // ACC ONLY
 #define BNO055_POWER_NORMAL 0x00
 #define BNO055_UNIT_SEL_SI 0x00
 #define BNO055_ACCEL_LSB_PER_MS2 100.0f
@@ -54,7 +55,7 @@
 #define BNO055_SAMPLE_PERIOD_MS 100U
 
 static const char *TAG = "BNO055_TEST";
-static uint8_t s_bno055_address = BNO055_ADDR_LOW;
+static uint8_t s_bno055_address = BNO055_ADDR_HIGH;
 
 typedef struct
 {
@@ -187,20 +188,63 @@ static esp_err_t bno055_set_mode(uint8_t mode)
     return ESP_OK;
 }
 
+#define BNO055_REG_SYS_TRIGGER 0x3FU
+#define BNO055_SYS_TRIGGER_RST 0x20U
+
+static esp_err_t bno055_software_reset(void)
+{
+    /*
+     * SYS_TRIGGER.RST_SYS = 1
+     *
+     * Reinicia el BNO055 por software. Después del reset el dispositivo
+     * necesita tiempo para arrancar de nuevo antes de aceptar comandos.
+     */
+    ESP_RETURN_ON_ERROR(
+        bno055_write_u8(BNO055_REG_PAGE_ID, 0x00U),
+        TAG,
+        "No se pudo seleccionar PAGE 0");
+
+    ESP_RETURN_ON_ERROR(
+        bno055_write_u8(BNO055_REG_SYS_TRIGGER, BNO055_SYS_TRIGGER_RST),
+        TAG,
+        "No se pudo realizar el reset del BNO055");
+
+    /*
+     * Tras escribir RST_SYS se pierde temporalmente la comunicación con
+     * el dispositivo mientras se reinicia.
+     */
+    vTaskDelay(pdMS_TO_TICKS(700U));
+
+    return ESP_OK;
+}
+
 //---------------------------------------------------------------------------
 static esp_err_t bno055_init(void)
 {
     vTaskDelay(pdMS_TO_TICKS(700));
 
     ESP_RETURN_ON_ERROR(bno055_detect(), TAG, "BNO055 no detectado");
+
+    /* Reset completo del BNO055. */
+  //  ESP_LOGI(TAG, "Realizando software reset");
+
+  //  ESP_RETURN_ON_ERROR(bno055_software_reset(), TAG, "Error durante software reset");
+
+  //  ESP_RETURN_ON_ERROR(bno055_detect(), TAG, "BNO055 no responde despues del reset");
+
+  //  ESP_LOGI(TAG, "BNO055 reiniciado correctamente");
+
     ESP_RETURN_ON_ERROR(bno055_set_mode(BNO055_MODE_CONFIG), TAG, "No se pudo entrar en CONFIGMODE");
+
     ESP_RETURN_ON_ERROR(bno055_write_u8(BNO055_REG_PAGE_ID, 0x00), TAG, "No se pudo seleccionar PAGE 0");
     ESP_RETURN_ON_ERROR(bno055_write_u8(BNO055_REG_PWR_MODE, BNO055_POWER_NORMAL), TAG, "No se pudo seleccionar POWER_NORMAL");
 
     vTaskDelay(pdMS_TO_TICKS(10));
 
     ESP_RETURN_ON_ERROR(bno055_write_u8(BNO055_REG_UNIT_SEL, BNO055_UNIT_SEL_SI), TAG, "No se pudieron configurar las unidades");
-    ESP_RETURN_ON_ERROR(bno055_set_mode(BNO055_MODE_NDOF), TAG, "No se pudo activar NDOF");
+
+    //    ESP_RETURN_ON_ERROR(bno055_set_mode(BNO055_MODE_NDOF), TAG, "No se pudo activar NDOF");
+    ESP_RETURN_ON_ERROR(bno055_set_mode(BNO055_MODE_ACCONLY), TAG, "No se pudo activar ACCONLY");
 
     vTaskDelay(pdMS_TO_TICKS(500));
 
@@ -314,33 +358,42 @@ static esp_err_t bno055_read_efis_data(bno055_efis_data_t *data)
     esp_err_t err;
 
     err = bno055_read_vector_ms2(BNO055_REG_ACCEL_DATA_X_LSB, &sample.acceleration_ms2);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     err = bno055_read_vector_scaled(BNO055_REG_MAG_DATA_X_LSB, BNO055_MAG_LSB_PER_UT, &sample.magnetic_field_ut);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     err = bno055_read_vector_scaled(BNO055_REG_GYRO_DATA_X_LSB, BNO055_GYRO_LSB_PER_DPS, &sample.gyro_dps);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     err = bno055_read_euler(&sample.heading_deg, &sample.roll_deg, &sample.pitch_deg);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     err = bno055_read_quaternion(&sample.quaternion);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     err = bno055_read_vector_ms2(BNO055_REG_LINEAR_ACC_X_LSB, &sample.linear_acceleration_ms2);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     err = bno055_read_vector_ms2(BNO055_REG_GRAVITY_X_LSB, &sample.gravity_ms2);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     uint8_t temperature_raw = 0;
     err = bno055_read_u8(BNO055_REG_TEMP, &temperature_raw);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
     sample.temperature_c = (int8_t)temperature_raw;
 
     err = bno055_read_calibration(&sample.calibration_system, &sample.calibration_gyro, &sample.calibration_accel, &sample.calibration_mag);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK)
+        return err;
 
     sample.valid = true;
     *data = sample;
@@ -410,6 +463,24 @@ static void bno055_task(void *argument)
                      efis.calibration_gyro,
                      efis.calibration_accel,
                      efis.calibration_mag);
+
+            uint8_t acc_id = 0;
+            uint8_t mag_id = 0;
+            uint8_t gyr_id = 0;
+
+            ESP_ERROR_CHECK(bno055_write_u8(BNO055_REG_PAGE_ID, 0x00));
+
+            ESP_ERROR_CHECK(bno055_read_u8(0x01, &acc_id));
+            ESP_ERROR_CHECK(bno055_read_u8(0x02, &mag_id));
+            ESP_ERROR_CHECK(bno055_read_u8(0x03, &gyr_id));
+
+            ESP_LOGI(TAG, "ACC_ID=0x%02X MAG_ID=0x%02X GYR_ID=0x%02X", acc_id, mag_id, gyr_id);
+
+            uint8_t raw_acc[6];
+
+            ESP_ERROR_CHECK(bno055_read(BNO055_REG_ACCEL_DATA_X_LSB, raw_acc, sizeof(raw_acc)));
+
+            ESP_LOGI(TAG, "ACC RAW = %02X %02X %02X %02X %02X %02X", raw_acc[0], raw_acc[1], raw_acc[2], raw_acc[3], raw_acc[4], raw_acc[5]);
         }
         else
         {

@@ -1,0 +1,3381 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>ULM-EFIS</title>
+    <style>
+      /* Modo compacto: panel e instrumentos reducidos aproximadamente un 20 %. */
+      :root {
+        color-scheme: dark;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #0c151e;
+        color: #f4f7fa;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 12px;
+      }
+      .panel {
+        width: min(940px, 100%);
+        background: #182838;
+        border-radius: 10px;
+        padding: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      }
+      h1 {
+        margin: 0 0 18px;
+        text-align: center;
+        font-size: clamp(18px, 3vw, 25px);
+      }
+      .status {
+        text-align: center;
+        margin-bottom: 18px;
+      }
+      .connected {
+        color: #41d878;
+      }
+      .disconnected {
+        color: #ff6464;
+      }
+      .instruments-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: auto;
+        gap: 8px;
+        margin: 0 auto 14px;
+        align-items: stretch;
+      }
+      .instrument-section {
+        min-width: 0;
+        width: 100%;
+        text-align: center;
+        background: #0f1c28;
+        border-radius: 10px;
+        padding: 8px 8px 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .instrument-wrap {
+        width: min(380px, 100%);
+        margin: 0 auto;
+        aspect-ratio: 1;
+      }
+      #altimeter,
+      #variometer,
+      #horizon,
+      #turnCoordinator,
+      #compassCard,
+      #groundSpeedGauge {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .instrument-wrap > svg,
+      .instrument-wrap > .heading-instrument {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .instrument-readout {
+        margin-top: -4px;
+        color: #c5d2de;
+        font-size: 15px;
+      }
+      .instrument-readout strong {
+        color: #fff;
+        font-size: 22px;
+      }
+
+      /*
+       * Turn Coordinator y Ground Speed no tienen controles debajo del
+       * readout. Se fuerza el flujo normal desde la parte superior para
+       * evitar que justify-content: space-between empuje el texto hasta
+       * el fondo de la celda de la rejilla.
+       *
+       * Así el readout queda inmediatamente debajo del círculo, con la
+       * misma separación que Pitch/Roll y Rumbo indicado.
+       */
+      .turn-coordinator-section,
+      .ground-speed-section {
+        justify-content: flex-start;
+      }
+
+      .turn-coordinator-section .instrument-readout,
+      .ground-speed-section .instrument-readout {
+        margin-top: -4px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .card {
+        background: #0f1c28;
+        border-radius: 9px;
+        padding: 12px;
+        min-height: 88px;
+      }
+      .label {
+        color: #9db0c2;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      .value {
+        font-size: clamp(24px, 6vw, 38px);
+        font-weight: 700;
+        line-height: 1;
+      }
+      .unit {
+        color: #9db0c2;
+        font-size: 14px;
+        margin-left: 4px;
+      }
+      .qnh-card {
+        grid-column: 1/-1;
+        text-align: center;
+      }
+      .qnh-control {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .qnh-button {
+        width: 52px;
+        height: 54px;
+        border: 0;
+        border-radius: 10px;
+        background: #2d88d8;
+        color: white;
+        font-size: 32px;
+        font-weight: 700;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .qnh-button:active {
+        transform: translateY(1px);
+        background: #2476bd;
+      }
+      .qnh-button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .qnh-value {
+        min-width: 190px;
+      }
+
+      .instrument-adjustment {
+        width: 100%;
+        margin-top: 10px;
+        padding: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.14);
+        border-radius: 10px;
+      }
+
+      .adjustment-title {
+        color: #9db0c2;
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
+
+      .adjustment-control {
+        display: grid;
+        grid-template-columns: 52px minmax(100px, 1fr) 52px;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+
+      .adjustment-button {
+        width: 52px;
+        height: 44px;
+        border: 0;
+        border-radius: 10px;
+        background: #2d88d8;
+        color: #fff;
+        font-size: 25px;
+        font-weight: 700;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .adjustment-button:active {
+        transform: translateY(1px);
+        background: #2476bd;
+      }
+
+      .adjustment-button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .adjustment-value {
+        min-width: 0;
+        font-size: clamp(21px, 4vw, 30px);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .adjustment-unit {
+        color: #9db0c2;
+        font-size: 14px;
+        margin-left: 4px;
+      }
+
+      /* Data logger SPIFFS */
+      .logger-panel {
+        margin-top: 14px;
+        padding: 14px;
+        background: #0f1c28;
+        border-radius: 10px;
+        text-align: center;
+      }
+
+      .logger-title {
+        color: #c5d2de;
+        font-weight: 700;
+        font-size: 15px;
+        margin-bottom: 10px;
+      }
+
+      .logger-status {
+        color: #9db0c2;
+        font-size: 13px;
+        margin-bottom: 12px;
+        min-height: 18px;
+      }
+
+      .logger-controls {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .logger-button {
+        min-width: 190px;
+        min-height: 46px;
+        border: 0;
+        border-radius: 10px;
+        padding: 9px 16px;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .record-button {
+        background: #2d88d8;
+      }
+
+      .record-button.recording {
+        background: #c93636;
+        box-shadow: 0 0 0 2px rgba(255, 90, 90, 0.25);
+      }
+
+      .download-button {
+        background: #257a4a;
+      }
+
+      .logger-button:active {
+        transform: translateY(1px);
+      }
+
+      .logger-button:disabled {
+        opacity: 0.42;
+        cursor: not-allowed;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 18px;
+        margin-top: 12px;
+        color: #9db0c2;
+        font-size: 12px;
+        flex-wrap: wrap;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .instrument-placeholder {
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      /* Ground Speed */
+      .ground-speed-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        filter: drop-shadow(0 12px 14px rgba(0, 0, 0, 0.45));
+      }
+
+      /* Fila compacta de G: mínimo - actual - máximo. */
+      .g-values-row {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .g-values-row .card {
+        text-align: center;
+      }
+
+      .g-min-value {
+        color: #82f2a3;
+      }
+
+      .g-current-value {
+        color: #ffffff;
+      }
+
+      .g-max-value {
+        color: #7fd8ff;
+      }
+
+      /* Selector persistente de orientación del BNO055. */
+      .mount-card {
+        text-align: center;
+      }
+
+      .mount-selector {
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        gap: 18px;
+        margin-top: 4px;
+      }
+
+      .mount-option {
+        min-width: 96px;
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 9px;
+        padding: 7px 9px;
+        background: #172736;
+        color: #c5d2de;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .mount-option.active {
+        border-color: #41d878;
+        background: #203a33;
+        color: #ffffff;
+        box-shadow: inset 0 0 0 1px rgba(65,216,120,.28);
+      }
+
+      .mount-option:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+      }
+
+      .imu-mode-button {
+        min-width: 210px;
+        margin-top: 10px;
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 9px;
+        padding: 9px 14px;
+        background: #172736;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .imu-mode-button.amg {
+        border-color: #e5a84b;
+        background: #49371e;
+      }
+
+      .imu-mode-button.ndof {
+        border-color: #41d878;
+        background: #203a33;
+      }
+
+      .imu-mode-button:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+      }
+
+      .mount-shape {
+        display: block;
+        margin: 0 auto 5px;
+        border: 2px solid currentColor;
+        border-radius: 3px;
+        position: relative;
+      }
+
+      .mount-shape::after {
+        content: "▲";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+      }
+
+      .mount-shape-v {
+        width: 27px;
+        height: 48px;
+      }
+
+      .mount-shape-h {
+        width: 48px;
+        height: 27px;
+      }
+
+      .mount-name {
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .g-reset-button {
+        width: min(240px, 80%);
+        height: 44px;
+        margin: 14px auto 0;
+        border: 0;
+        border-radius: 10px;
+        background: #b53a3a;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .g-reset-button:active {
+        transform: translateY(1px);
+        background: #963030;
+      }
+
+      .g-reset-button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* Girodireccional */
+      .heading-instrument {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        overflow: hidden;
+        background: radial-gradient(
+          circle at 48% 42%,
+          #484848 0%,
+          #282828 48%,
+          #111 72%,
+          #050505 100%
+        );
+        border: 0;
+        box-shadow:
+          inset 0 0 24px rgba(255, 255, 255, 0.1),
+          0 5px 14px rgba(0, 0, 0, 0.45);
+      }
+
+      .heading-instrument::after {
+        content: "";
+        position: absolute;
+        inset: 10px;
+        border-radius: 50%;
+        pointer-events: none;
+        box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.78);
+        z-index: 20;
+      }
+
+      #compassCard {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        transform-origin: 50% 50%;
+        z-index: 2;
+      }
+
+      /*
+       * Heading manual bug.
+       * Se sitúa sobre el perímetro y gira alrededor del centro del instrumento.
+       * El triángulo amarillo apunta hacia el heading fijado por el usuario.
+       */
+      .gps-track-bug {
+        position: absolute;
+        inset: 0;
+        z-index: 13;
+        pointer-events: none;
+        transform-origin: 50% 50%;
+        opacity: 0;
+        transition: opacity 120ms linear;
+      }
+
+      .gps-track-bug.visible {
+        opacity: 1;
+      }
+
+      .gps-track-bug::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 21px;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 15px solid #ffd633;
+        filter: drop-shadow(0 1px 2px #000);
+      }
+
+      .heading-fixed-index {
+        position: absolute;
+        left: 50%;
+        top: 15px;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-top: 28px solid #f3f3f3;
+        z-index: 12;
+        filter: drop-shadow(0 1px 1px #000);
+      }
+
+      .heading-aircraft {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.9));
+        transform: scale(0.8);
+        transform-origin: center center;
+      }
+
+      .heading-hub {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        background: #dcdcdc;
+        border: 3px solid #111;
+        z-index: 11;
+      }
+
+      @media (max-width: 980px) {
+        .instruments-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 520px) {
+        body {
+          padding: 10px;
+        }
+        .panel {
+          padding: 12px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .qnh-card {
+          grid-column: auto;
+        }
+        .instruments-grid {
+          grid-template-columns: 1fr;
+        }
+        .instrument-wrap {
+          width: min(360px, 94vw);
+        }
+
+        .instrument-placeholder {
+          display: none;
+        }
+
+        .g-values-row {
+          gap: 6px;
+        }
+
+        .g-values-row .card {
+          padding: 9px 4px;
+          min-height: 78px;
+        }
+
+        .g-values-row .value {
+          font-size: clamp(20px, 7vw, 30px);
+        }
+      }
+    
+
+      /* ============================================================
+       * INSTRUMENTOS SUPERIORES
+       *
+       * Altímetro y horizonte muestran sus datos principales en las
+       * esquinas superiores de la tarjeta, liberando la zona inferior
+       * del círculo. Los tres instrumentos de la primera fila utilizan
+       * el mismo diámetro exterior.
+       * ============================================================ */
+      .top-instrument-section {
+        position: relative;
+        justify-content: flex-start;
+      }
+
+      .top-instrument-section .instrument-wrap {
+        width: min(420px, 100%);
+      }
+
+      .instrument-corner-readout {
+        position: absolute;
+        top: 9px;
+        z-index: 30;
+        min-width: 112px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        background: rgba(5, 10, 15, 0.68);
+        box-shadow: 0 2px 7px rgba(0, 0, 0, 0.32);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.12;
+      }
+
+      .instrument-corner-readout.left {
+        left: 9px;
+        text-align: left;
+      }
+
+      .instrument-corner-readout.right {
+        right: 9px;
+        text-align: right;
+      }
+
+      .corner-readout-label {
+        display: block;
+        color: #9db0c2;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        margin-bottom: 3px;
+        white-space: nowrap;
+      }
+
+      .corner-readout-value {
+        display: block;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .corner-readout-value strong {
+        color: #ffffff;
+        font-size: inherit;
+        font-weight: 700;
+      }
+
+      .corner-readout-unit {
+        color: #c5d2de;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      /* Los controles siguen debajo del círculo, pero sin readout intermedio. */
+      .top-instrument-section .instrument-adjustment {
+        margin-top: 2px;
+      }
+
+
+      /* Controles compactos de la fila superior:
+         [-]  QNH 1013.25 hPa  [+]
+         [-]  Ajuste inicial de pitch 0°  [+] */
+      .top-instrument-section .instrument-adjustment {
+        margin-top: 0;
+        padding: 3px 5px;
+        border-radius: 6px;
+      }
+
+      .top-instrument-section .adjustment-control {
+        grid-template-columns: 32px minmax(0, 1fr) 32px;
+        gap: 5px;
+      }
+
+      .top-instrument-section .adjustment-button {
+        width: 32px;
+        height: 27px;
+        min-height: 27px;
+        border-radius: 5px;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .top-instrument-section .adjustment-value {
+        font-size: 13px;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .top-instrument-section .adjustment-unit {
+        font-size: 11px;
+      }
+
+      .adjustment-inline-label {
+        color: #c5d2de;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 5px;
+      }
+
+      /* Un poco más de diámetro para los tres instrumentos superiores. */
+      .top-instrument-section .instrument-wrap {
+        width: min(440px, 100%);
+      }
+
+
+      .corner-readout-section { position: relative; justify-content: flex-start; }
+      .corner-readout-section .instrument-corner-readout { top: 9px; }
+      .heading-section .instrument-adjustment { margin-top: 0; padding: 3px 5px; border-radius: 6px; }
+      .heading-section .adjustment-control { grid-template-columns: 32px minmax(0,1fr) 32px; gap: 5px; }
+      .heading-section .adjustment-button { width:32px; height:27px; min-height:27px; font-size:18px; line-height:1; }
+      .heading-section .adjustment-value { font-size:13px; line-height:1; white-space:nowrap; }
+      /* ============================================================
+       * TABLET APAISADA - PRIORIDAD A INSTRUMENTOS
+       *
+       * No se escala globalmente la página.
+       * Los 6 instrumentos se organizan en 3 columnas x 2 filas.
+       * LAT/LON quedan inmediatamente después.
+       * El resto de la información continúa mediante scroll normal.
+       * ============================================================ */
+      @media (min-width: 700px) and (orientation: landscape) {
+
+        .top-instrument-section .instrument-wrap {
+          width: min(330px, 100%);
+        }
+
+        .top-instrument-section .instrument-adjustment {
+          margin-top: 0;
+          padding: 2px 4px;
+        }
+
+        .top-instrument-section .adjustment-control {
+          grid-template-columns: 29px minmax(0, 1fr) 29px;
+          gap: 4px;
+        }
+
+        .top-instrument-section .adjustment-button {
+          width: 29px;
+          height: 24px;
+          min-height: 24px;
+          font-size: 17px;
+        }
+
+        .top-instrument-section .adjustment-value {
+          font-size: 12px;
+        }
+
+        .top-instrument-section .adjustment-unit,
+        .top-instrument-section .adjustment-inline-label {
+          font-size: 10px;
+        }
+        html,
+        body {
+          width: 100%;
+          min-height: 100%;
+          overflow-x: hidden;
+          overflow-y: auto;
+        }
+
+        body {
+          padding: 6px;
+        }
+
+        .panel {
+          width: min(1180px, 100%);
+          padding: 7px;
+        }
+
+        h1 {
+          margin: 0 0 4px;
+          font-size: 18px;
+          line-height: 1.1;
+        }
+
+        .status {
+          margin-bottom: 5px;
+          font-size: 12px;
+        }
+
+        .instruments-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 5px;
+          margin-bottom: 5px;
+        }
+
+        .instrument-section {
+          padding: 4px 5px 6px;
+          border-radius: 7px;
+        }
+
+        .instrument-wrap {
+          width: min(250px, 100%);
+        }
+
+        .top-instrument-section .instrument-wrap {
+          width: min(315px, 100%);
+        }
+
+        .instrument-corner-readout {
+          top: 6px;
+          min-width: 92px;
+          padding: 4px 6px;
+        }
+
+        .instrument-corner-readout.left {
+          left: 6px;
+        }
+
+        .instrument-corner-readout.right {
+          right: 6px;
+        }
+
+        .corner-readout-label {
+          font-size: 9px;
+          margin-bottom: 2px;
+        }
+
+        .corner-readout-value {
+          font-size: 12px;
+        }
+
+        .corner-readout-unit {
+          font-size: 10px;
+        }
+
+        .instrument-readout {
+          margin-top: -4px;
+          font-size: 12px;
+          line-height: 1.15;
+        }
+
+        .instrument-readout strong {
+          font-size: 16px;
+        }
+
+        #gpsAltitudeRow {
+          margin-top: 2px !important;
+        }
+
+        .instrument-adjustment {
+          margin-top: 4px;
+          padding: 4px 6px;
+          border-radius: 6px;
+        }
+
+        .adjustment-title {
+          font-size: 10px;
+          margin-bottom: 3px;
+        }
+
+        .adjustment-control {
+          grid-template-columns: 34px minmax(68px, 1fr) 34px;
+          gap: 4px;
+        }
+
+        .adjustment-button {
+          width: 34px;
+          height: 30px;
+          border-radius: 6px;
+          font-size: 19px;
+        }
+
+        .adjustment-value {
+          font-size: 15px;
+        }
+
+        .adjustment-unit {
+          font-size: 10px;
+        }
+
+        /*
+         * LAT/LON siguen formando parte de la zona prioritaria.
+         * Se mantienen en dos columnas y se compactan ligeramente.
+         */
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 5px;
+        }
+
+        .grid > .card:nth-child(1),
+        .grid > .card:nth-child(2) {
+          min-height: 54px;
+          padding: 6px 9px;
+        }
+
+        .grid > .card:nth-child(1) .label,
+        .grid > .card:nth-child(2) .label {
+          margin-bottom: 3px;
+          font-size: 10px;
+        }
+
+        .grid > .card:nth-child(1) .value,
+        .grid > .card:nth-child(2) .value {
+          font-size: 21px;
+        }
+
+        .grid > .card:nth-child(1) .unit,
+        .grid > .card:nth-child(2) .unit {
+          font-size: 11px;
+        }
+
+        /*
+         * Temperatura, configuración H/V, G y DataLogger permanecen
+         * con su diseño normal y aparecen al continuar haciendo scroll.
+         */
+      }
+
+
+
+      /* ============================================================
+       * AJUSTE FINAL TABLET / PANEL PRINCIPAL
+       * ============================================================ */
+      .connection-led {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        width: 13px;
+        height: 13px;
+        min-width: 13px;
+        border-radius: 50%;
+        z-index: 35;
+        border: 1px solid rgba(255,255,255,.55);
+        box-shadow: 0 0 7px currentColor;
+      }
+      .connection-led.connected { background: #41d878; color: #41d878; }
+      .connection-led.disconnected { background: #ff4d4d; color: #ff4d4d; }
+
+      .gps-coordinate-card {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .gps-coordinate-card .label { margin: 0; }
+
+      @media (min-width: 700px) and (orientation: landscape) {
+        body {
+          min-height: 100dvh;
+          padding: 4px;
+        }
+        .panel {
+          width: min(1180px, 100%);
+          min-height: 100dvh;
+          padding: 5px;
+          display: flex;
+          flex-direction: column;
+        }
+        h1 {
+          flex: 0 0 auto;
+          margin: 0 0 3px;
+          font-size: 16px;
+          line-height: 1.05;
+        }
+        .instruments-grid {
+          flex: 0 0 auto;
+          height: calc(100dvh - 82px);
+          min-height: 0;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-rows: repeat(2, minmax(0, 1fr));
+          grid-auto-rows: minmax(0, 1fr);
+          gap: 4px;
+          margin: 0 0 4px;
+          align-items: stretch;
+        }
+        .instrument-section,
+        .top-instrument-section,
+        .corner-readout-section,
+        .turn-coordinator-section,
+        .ground-speed-section {
+          height: 100%;
+          min-height: 0;
+          padding: 3px 4px 4px;
+          overflow: hidden;
+          justify-content: flex-start;
+        }
+        /* Un único tamaño base para los seis instrumentos. */
+        .instrument-wrap,
+        .top-instrument-section .instrument-wrap {
+          width: auto;
+          height: calc(100% - 29px);
+          max-width: 100%;
+          max-height: calc(100% - 29px);
+          aspect-ratio: 1;
+          margin: 0 auto;
+          flex: 0 1 auto;
+        }
+        /* VSI, bola y GS no tienen selector inferior: se reserva el mismo
+           espacio para que su círculo no cambie la altura de la tarjeta. */
+        .variometer-section .instrument-wrap,
+        .turn-coordinator-section .instrument-wrap,
+        .ground-speed-section .instrument-wrap {
+          height: calc(100% - 29px);
+          max-height: calc(100% - 29px);
+        }
+        .instrument-corner-readout,
+        .corner-readout-section .instrument-corner-readout {
+          top: 4px;
+          min-width: 86px;
+          padding: 3px 5px;
+        }
+        .instrument-corner-readout.left { left: 4px; }
+        .instrument-corner-readout.right { right: 4px; }
+        .corner-readout-label { font-size: 11px; margin-bottom: 1px; }
+        .corner-readout-value { font-size: 13px; }
+        .corner-readout-unit { font-size: 11px; }
+
+        .top-instrument-section .instrument-adjustment,
+        .heading-section .instrument-adjustment {
+          flex: 0 0 25px;
+          height: 25px;
+          margin-top: 0;
+          padding: 1px 3px;
+        }
+        .top-instrument-section .adjustment-control,
+        .heading-section .adjustment-control {
+          height: 100%;
+          grid-template-columns: 27px minmax(0,1fr) 27px;
+          gap: 3px;
+        }
+        .top-instrument-section .adjustment-button,
+        .heading-section .adjustment-button {
+          width: 27px;
+          height: 21px;
+          min-height: 21px;
+          font-size: 16px;
+        }
+        .top-instrument-section .adjustment-value,
+        .heading-section .adjustment-value { font-size: 13px; }
+        .top-instrument-section .adjustment-unit,
+        .top-instrument-section .adjustment-inline-label,
+        .heading-section .adjustment-unit,
+        .heading-section .adjustment-inline-label { font-size: 11px; }
+
+        /* LAT/LON forman la última franja visible de la tablet. */
+        .grid {
+          flex: 0 0 48px;
+          grid-template-columns: repeat(2, minmax(0,1fr));
+          gap: 4px;
+        }
+        .grid > .gps-coordinate-card:nth-child(1),
+        .grid > .gps-coordinate-card:nth-child(2) {
+          min-height: 0;
+          height: 44px;
+          padding: 4px 8px;
+        }
+        .gps-coordinate-card .label { font-size: 11px; }
+        .gps-coordinate-card .value { font-size: 19px; }
+        .gps-coordinate-card .unit { font-size: 11px; margin-left: 0; }
+
+        /* A partir del tercer elemento de .grid comienza la zona secundaria,
+           accesible mediante scroll. */
+        .grid > .card:nth-child(n+3),
+        .grid > .g-values-row {
+          margin-top: 4px;
+        }
+        .connection-led {
+          left: 7px;
+          bottom: 7px;
+          width: 11px;
+          height: 11px;
+          min-width: 11px;
+        }
+      }
+
+
+      /* ============================================================
+       * FILA INFERIOR PRIORITARIA: LAT / LON / ESTADO ESP32-S3
+       * ============================================================ */
+      .primary-info-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+        margin: 0 0 5px;
+      }
+
+      .primary-info-row .card {
+        min-width: 0;
+      }
+
+      .system-status-card {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+
+      .system-status-card h1 {
+        margin: 0;
+        font-size: clamp(11px, 1.6vw, 16px);
+        line-height: 1.15;
+        font-weight: 700;
+        white-space: normal;
+      }
+
+      /* LED WebSocket algo mayor para lectura rápida. */
+      .connection-led {
+        width: 18px;
+        height: 18px;
+        min-width: 18px;
+        border-width: 2px;
+        box-shadow: 0 0 9px currentColor;
+      }
+
+      @media (min-width: 700px) and (orientation: landscape) {
+        /* Ya no existe una cabecera independiente: ese espacio se entrega
+           a los seis instrumentos. */
+        .instruments-grid {
+          height: calc(100dvh - 61px);
+        }
+
+        .primary-info-row {
+          flex: 0 0 48px;
+          height: 48px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 4px;
+          margin: 0;
+        }
+
+        .primary-info-row .card {
+          min-height: 0;
+          height: 44px;
+          padding: 4px 8px;
+        }
+
+        .primary-info-row .gps-coordinate-card {
+          display: flex;
+          align-items: baseline;
+          justify-content: center;
+          gap: 6px;
+          white-space: nowrap;
+        }
+
+        .primary-info-row .gps-coordinate-card .label {
+          margin: 0;
+          font-size: 11px;
+        }
+
+        .primary-info-row .gps-coordinate-card .value {
+          font-size: 19px;
+        }
+
+        .primary-info-row .gps-coordinate-card .unit {
+          font-size: 11px;
+          margin-left: 0;
+        }
+
+        .system-status-card h1 {
+          font-size: 12px;
+        }
+
+        .connection-led {
+          left: 7px;
+          bottom: 7px;
+          width: 16px;
+          height: 16px;
+          min-width: 16px;
+        }
+
+        /* La antigua .grid contiene ahora únicamente información secundaria
+           y comienza por debajo del viewport prioritario. */
+        .grid {
+          flex: none;
+          margin-top: 4px;
+        }
+      }
+
+      @media (max-width: 699px), (orientation: portrait) {
+        .primary-info-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <section class="instruments-grid" aria-label="Instrumentos de vuelo">
+        <article class="instrument-section top-instrument-section altimeter-section" aria-label="Altímetro analógico">
+          <div class="instrument-corner-readout left" aria-label="Altitud barométrica">
+            <span class="corner-readout-label">Alt. Barométrica</span>
+            <span class="corner-readout-value">
+              <strong id="altitudeFeet">0</strong>
+              <span class="corner-readout-unit">ft</span> ·
+              <strong id="altitudeMeters">0</strong>
+              <span class="corner-readout-unit">m</span>
+            </span>
+          </div>
+
+          <div
+            id="gpsAltitudeRow"
+            class="instrument-corner-readout right"
+            aria-label="Altitud GPS"
+          >
+            <span class="corner-readout-label">Alt GPS</span>
+            <span class="corner-readout-value">
+              <strong id="gpsAltitudeMeters">--</strong>
+              <span class="corner-readout-unit">m</span>
+            </span>
+          </div>
+
+          <div class="instrument-wrap">
+            <canvas id="altimeter" width="700" height="700"></canvas>
+          </div>
+          <div class="instrument-adjustment" aria-label="Ajuste de QNH">
+            <div class="adjustment-control">
+              <button
+                id="qnhDown"
+                class="adjustment-button"
+                type="button"
+                aria-label="Reducir QNH"
+              >
+                −
+              </button>
+              <div class="adjustment-value">
+                <span class="adjustment-inline-label">QNH</span><span id="qnh">1013.25</span>
+                <span class="adjustment-unit">hPa</span>
+              </div>
+              <button
+                id="qnhUp"
+                class="adjustment-button"
+                type="button"
+                aria-label="Aumentar QNH"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <article class="instrument-section top-instrument-section variometer-section" aria-label="Variómetro analógico">
+          <div class="instrument-wrap">
+            <canvas id="variometer" width="700" height="700"></canvas>
+          </div>
+        </article>
+
+        <article class="instrument-section top-instrument-section horizon-section" aria-label="Horizonte artificial">
+          <div class="instrument-corner-readout left" aria-label="Pitch">
+            <span class="corner-readout-label">Pitch</span>
+            <span class="corner-readout-value">
+              <strong id="horizonPitchDeg">0.00</strong><span class="corner-readout-unit">°</span>
+            </span>
+          </div>
+
+          <div class="instrument-corner-readout right" aria-label="Roll">
+            <span class="corner-readout-label">Roll</span>
+            <span class="corner-readout-value">
+              <strong id="horizonRollDeg">0.00</strong><span class="corner-readout-unit">°</span>
+            </span>
+          </div>
+
+          <div class="instrument-wrap">
+            <canvas
+              id="horizon"
+              width="1000"
+              height="1000"
+              aria-label="Horizonte artificial controlado por pitch y roll"
+            ></canvas>
+          </div>
+          <div
+            class="instrument-adjustment"
+            aria-label="Ajuste inicial de pitch"
+          >
+            <div class="adjustment-control">
+              <button
+                id="pitchOffsetDown"
+                class="adjustment-button"
+                type="button"
+                aria-label="Reducir offset de pitch"
+              >
+                −
+              </button>
+              <div class="adjustment-value">
+                <span class="adjustment-inline-label">Ajuste inicial de pitch</span><span id="pitchOffsetDeg">0</span><span class="adjustment-unit">°</span>
+              </div>
+              <button
+                id="pitchOffsetUp"
+                class="adjustment-button"
+                type="button"
+                aria-label="Aumentar offset de pitch"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <article
+          class="instrument-section turn-coordinator-section corner-readout-section"
+          aria-label="Coordinador de viraje y bola"
+        >
+          <div class="instrument-corner-readout left">
+            <span class="corner-readout-label">Giro</span>
+            <span class="corner-readout-value"><strong id="turnRateDps">0.00</strong> <span class="corner-readout-unit">°/s</span></span>
+          </div>
+          <div class="instrument-corner-readout right">
+            <span class="corner-readout-label">Bola</span>
+            <span class="corner-readout-value"><strong id="slipBallDeg">0.0</strong><span class="corner-readout-unit">°</span></span>
+          </div>
+          <div class="instrument-wrap">
+            <svg
+              id="turnCoordinator"
+              viewBox="0 0 800 800"
+              role="img"
+              aria-label="Coordinador de viraje interactivo"
+            >
+              <defs>
+                <radialGradient id="bezelGradient" cx="45%" cy="34%">
+                  <stop offset="0%" stop-color="#777" />
+                  <stop offset="42%" stop-color="#414141" />
+                  <stop offset="76%" stop-color="#202020" />
+                  <stop offset="100%" stop-color="#090909" />
+                </radialGradient>
+
+                <radialGradient id="faceGradient" cx="50%" cy="40%">
+                  <stop offset="0%" stop-color="#30343a" />
+                  <stop offset="62%" stop-color="#1c2127" />
+                  <stop offset="100%" stop-color="#11151a" />
+                </radialGradient>
+
+                <linearGradient id="tubeGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#efedbd" />
+                  <stop offset="30%" stop-color="#cacc9f" />
+                  <stop offset="58%" stop-color="#85886d" />
+                  <stop offset="100%" stop-color="#d7d6aa" />
+                </linearGradient>
+
+                <radialGradient id="ballGradient" cx="34%" cy="26%">
+                  <stop offset="0%" stop-color="#c9c9c9" />
+                  <stop offset="18%" stop-color="#555" />
+                  <stop offset="58%" stop-color="#111" />
+                  <stop offset="100%" stop-color="#010101" />
+                </radialGradient>
+
+                <filter
+                  id="shadow"
+                  x="-30%"
+                  y="-30%"
+                  width="160%"
+                  height="160%"
+                >
+                  <feDropShadow
+                    dx="0"
+                    dy="7"
+                    stdDeviation="6"
+                    flood-color="#000"
+                    flood-opacity=".62"
+                  />
+                </filter>
+
+                <!-- El clip coincide con la cavidad interior del tubo -->
+                <clipPath id="tubeClip">
+                  <path
+                    d="
+              M 250 548
+              Q 400 580 550 548
+              L 538 603
+              Q 400 630 262 603
+              Z"
+                  />
+                </clipPath>
+              </defs>
+
+              <!-- Marco -->
+              <circle cx="400" cy="400" r="386" fill="#080808" />
+              <circle
+                cx="400"
+                cy="400"
+                r="375"
+                fill="url(#bezelGradient)"
+                stroke="#b9b9b9"
+                stroke-width="8"
+              />
+              <circle
+                cx="400"
+                cy="400"
+                r="339"
+                fill="url(#faceGradient)"
+                stroke="#262b31"
+                stroke-width="20"
+              />
+
+              <!-- Únicamente las marcas de 0° y las inferiores -->
+              <g fill="#fff">
+                <rect x="127" y="391" width="49" height="19" rx="4" />
+                <rect x="624" y="391" width="49" height="19" rx="4" />
+
+                <rect
+                  x="155"
+                  y="493"
+                  width="48"
+                  height="18"
+                  rx="3"
+                  transform="rotate(-18 179 502)"
+                />
+                <rect
+                  x="597"
+                  y="493"
+                  width="48"
+                  height="18"
+                  rx="3"
+                  transform="rotate(18 621 502)"
+                />
+              </g>
+
+              <!-- Avión más esbelto -->
+              <g
+                id="aircraft"
+                transform="rotate(0 400 400)"
+                filter="url(#shadow)"
+              >
+                <path
+                  d="
+            M 170 394
+            L 350 387
+            L 374 379
+            L 385 328
+            Q 388 318 400 318
+            Q 412 318 415 328
+            L 426 379
+            L 450 387
+            L 630 394
+            Q 638 394 638 401
+            Q 638 408 630 409
+            L 449 416
+            L 425 423
+            L 414 435
+            Q 408 441 400 441
+            Q 392 441 386 435
+            L 375 423
+            L 351 416
+            L 170 409
+            Q 162 408 162 401
+            Q 162 394 170 394
+            Z"
+                  fill="#fafafa"
+                />
+
+                <path
+                  d="M 354 395 L 446 395"
+                  stroke="#d8d8d8"
+                  stroke-width="3"
+                  opacity=".52"
+                />
+              </g>
+
+              <text
+                x="400"
+                y="536"
+                fill="#f6f6f6"
+                text-anchor="middle"
+                font-size="26"
+                font-family="Arial"
+              >
+                TURN COORDINATOR
+              </text>
+
+              <!-- Contenedor de la bola -->
+              <path
+                d="
+          M 250 548
+          Q 400 580 550 548
+          L 538 603
+          Q 400 630 262 603
+          Z"
+                fill="url(#tubeGradient)"
+                stroke="#d2d2aa"
+                stroke-width="3"
+              />
+
+              <path
+                d="
+          M 250 548
+          Q 282 555 306 560
+          L 313 613
+          Q 282 609 262 603 Z"
+                fill="#74775f"
+                opacity=".42"
+              />
+
+              <path
+                d="
+          M 550 548
+          Q 518 555 494 560
+          L 487 613
+          Q 518 609 538 603 Z"
+                fill="#74775f"
+                opacity=".42"
+              />
+
+              <!-- Marcas de centrado -->
+              <g stroke="#22262a" stroke-width="7">
+                <path d="M 365 568 Q 362 591 365 619" />
+                <path d="M 435 568 Q 438 591 435 619" />
+              </g>
+
+              <!-- Bola: centro calculado sobre una curva y siempre dentro del clip -->
+              <g id="ball" clip-path="url(#tubeClip)">
+                <circle cx="400" cy="589" r="24" fill="url(#ballGradient)" />
+                <ellipse
+                  cx="391"
+                  cy="580"
+                  rx="7"
+                  ry="5"
+                  fill="#fff"
+                  opacity=".16"
+                />
+              </g>
+
+              <text
+                x="225"
+                y="620"
+                fill="#fff"
+                text-anchor="middle"
+                font-size="45"
+                font-family="Arial"
+              >
+                L
+              </text>
+
+              <text
+                x="575"
+                y="620"
+                fill="#fff"
+                text-anchor="middle"
+                font-size="45"
+                font-family="Arial"
+              >
+                R
+              </text>
+
+              <text
+                x="400"
+                y="656"
+                fill="#fff"
+                text-anchor="middle"
+                font-size="30"
+                font-family="Arial"
+                letter-spacing="3"
+              >
+                2 MIN.
+              </text>
+
+              <text
+                x="400"
+                y="704"
+                fill="#fff"
+                text-anchor="middle"
+                font-size="23"
+                font-family="Arial"
+              >
+                <tspan x="400" dy="0">NO PITCH</tspan>
+                <tspan x="400" dy="27">INFORMATION</tspan>
+              </text>
+            </svg>
+          </div>
+        </article>
+
+        <article class="instrument-section corner-readout-section heading-section" aria-label="Girodireccional">
+          <div class="instrument-corner-readout left">
+            <span class="corner-readout-label">Rumbo indicado</span>
+            <span class="corner-readout-value"><strong id="headingDeg">000</strong><span class="corner-readout-unit">°</span></span>
+          </div>
+          <div class="instrument-wrap">
+            <div
+              class="heading-instrument"
+              role="img"
+              aria-label="Girodireccional controlado por el rumbo"
+            >
+              <svg id="compassCard" viewBox="0 0 400 400" aria-hidden="true">
+                <circle cx="200" cy="200" r="198" fill="#202020"></circle>
+                <g id="compassMarks"></g>
+                <g id="compassLabels"></g>
+              </svg>
+
+              <div
+                id="gpsTrackBug"
+                class="gps-track-bug"
+                aria-hidden="true"
+                title="Track GPS"
+              ></div>
+
+              <div class="heading-fixed-index"></div>
+
+              <svg
+                class="heading-aircraft"
+                viewBox="0 0 400 400"
+                aria-hidden="true"
+              >
+                <path
+                  d="
+                  M200 92 L190 132 L184 181 L116 220 L116 239
+                  L181 218 L181 275 L162 291 L162 306 L200 292
+                  L238 306 L238 291 L219 275 L219 218 L284 239
+                  L284 220 L216 181 L210 132 Z"
+                  fill="#252525"
+                  stroke="#eeeeee"
+                  stroke-width="4"
+                  stroke-linejoin="round"
+                ></path>
+                <line
+                  x1="200"
+                  y1="83"
+                  x2="200"
+                  y2="112"
+                  stroke="#eeeeee"
+                  stroke-width="4"
+                ></line>
+              </svg>
+
+              <div class="heading-hub"></div>
+            </div>
+          </div>
+          <div
+            class="instrument-adjustment"
+            aria-label="Heading manual"
+          >
+            <div class="adjustment-control">
+              <button
+                id="headingOffsetDown"
+                class="adjustment-button"
+                type="button"
+                aria-label="Reducir heading manual"
+              >
+                −
+              </button>
+              <div class="adjustment-value">
+                <span class="adjustment-inline-label">Heading manual</span><span id="headingOffsetDeg">0</span><span class="adjustment-unit">°</span>
+              </div>
+              <button
+                id="headingOffsetUp"
+                class="adjustment-button"
+                type="button"
+                aria-label="Aumentar heading manual"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <article
+          class="instrument-section ground-speed-section corner-readout-section"
+          aria-label="Indicador de Ground Speed"
+        >
+          <div class="instrument-corner-readout left">
+            <span class="corner-readout-label">Ground Speed</span>
+            <span class="corner-readout-value"><strong id="groundSpeedKnots">--</strong> <span class="corner-readout-unit">kt</span></span>
+          </div>
+          <div class="instrument-corner-readout right">
+            <span class="corner-readout-label">Ground Speed</span>
+            <span class="corner-readout-value"><strong id="groundSpeedKmh">--</strong> <span class="corner-readout-unit">km/h</span></span>
+          </div>
+          <div id="connection" class="connection-led disconnected" role="status" aria-label="WebSocket desconectado" title="WebSocket desconectado"></div>
+          <div class="instrument-wrap">
+            <canvas
+              id="groundSpeedGauge"
+              class="ground-speed-canvas"
+              width="700"
+              height="700"
+              aria-label="Velocidad respecto al suelo en nudos"
+            ></canvas>
+          </div>
+        </article>
+      </section>
+
+      <section class="primary-info-row" aria-label="GPS y estado del sistema">
+        <article class="card gps-coordinate-card">
+          <span class="label">LAT GPS</span>
+          <span id="gpsLatitude" class="value">--</span><span class="unit">°</span>
+        </article>
+        <article class="card gps-coordinate-card">
+          <span class="label">LON GPS</span>
+          <span id="gpsLongitude" class="value">--</span><span class="unit">°</span>
+        </article>
+        <article class="card system-status-card">
+          <h1 id="headerTitle">ULM-EFIS · Esperando fecha/hora GPS...</h1>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="label">Temperatura BMP280</div>
+          <span id="temperature" class="value">--</span
+          ><span class="unit">°C</span>
+        </article>
+        <article class="card mount-card">
+          <div class="label">Configuración de montaje</div>
+          <div class="mount-selector" aria-label="Orientación física del EFIS">
+            <button id="mountModeV" class="mount-option active" type="button">
+              <span class="mount-shape mount-shape-v" aria-hidden="true"></span>
+              <span class="mount-name">Conf. V</span>
+            </button>
+            <button id="mountModeH" class="mount-option" type="button">
+              <span class="mount-shape mount-shape-h" aria-hidden="true"></span>
+              <span class="mount-name">Conf. H</span>
+            </button>
+          </div>
+          <button id="imuModeToggle" class="imu-mode-button ndof" type="button">
+            IMU · NDOF
+          </button>
+        </article>
+        <div class="g-values-row" aria-label="Factor de carga total">
+          <article class="card">
+            <div class="label">G mínima</div>
+            <span id="gMinValue" class="value g-min-value">0.00</span
+            ><span class="unit">G</span>
+          </article>
+          <article class="card">
+            <div class="label">G actual</div>
+            <span id="gCurrentValue" class="value g-current-value">0.00</span
+            ><span class="unit">G</span>
+          </article>
+          <article class="card">
+            <div class="label">G máxima</div>
+            <span id="gMaxValue" class="value g-max-value">0.00</span
+            ><span class="unit">G</span>
+          </article>
+        </div>
+      </section>
+
+      <div style="text-align: center; margin-top: 10px">
+        <button id="gResetButton" class="g-reset-button" type="button">
+          RESET G A 0
+        </button>
+      </div>
+
+      <section class="logger-panel" aria-label="Registro de aceleración">
+        <div class="logger-title">Registro de aceleración vertical</div>
+        <div id="loggerStatus" class="logger-status">
+          Registro detenido · Sin fichero
+        </div>
+        <div class="logger-controls">
+          <button
+            id="recordButton"
+            class="logger-button record-button"
+            type="button"
+          >
+            GRABAR
+          </button>
+          <button
+            id="downloadButton"
+            class="logger-button download-button"
+            type="button"
+            disabled
+          >
+            DESCARGAR CSV
+          </button>
+        </div>
+      </section>
+
+      <div class="footer">
+        <span id="messageRate">0 mensajes/s</span>
+        <span>Contador: <span id="counter">0</span></span>
+        <span id="time">t = 0.0000 s</span>
+      </div>
+    </main>
+    <script>
+      "use strict";
+
+      const connectionElement = document.getElementById("connection");
+      const recordButton = document.getElementById("recordButton");
+      const downloadButton = document.getElementById("downloadButton");
+      const loggerStatusElement = document.getElementById("loggerStatus");
+      let loggerRecording = false;
+      let loggerFileAvailable = false;
+      const qnhUpButton = document.getElementById("qnhUp");
+      const qnhDownButton = document.getElementById("qnhDown");
+      const pitchOffsetUpButton = document.getElementById("pitchOffsetUp");
+      const pitchOffsetDownButton = document.getElementById("pitchOffsetDown");
+      const headingOffsetUpButton = document.getElementById("headingOffsetUp");
+      const headingOffsetDownButton =
+        document.getElementById("headingOffsetDown");
+      const pitchOffsetDegElement = document.getElementById("pitchOffsetDeg");
+      const headingOffsetDegElement =
+        document.getElementById("headingOffsetDeg");
+      const canvas = document.getElementById("altimeter");
+      const ctx = canvas.getContext("2d");
+      const variometerCanvas = document.getElementById("variometer");
+      const variometerCtx = variometerCanvas.getContext("2d");
+      const horizonCanvas = document.getElementById("horizon");
+      const horizonCtx = horizonCanvas.getContext("2d");
+      const horizonPitchDegElement = document.getElementById("horizonPitchDeg");
+      const horizonRollDegElement = document.getElementById("horizonRollDeg");
+      const altitudeFeetElement = document.getElementById("altitudeFeet");
+      const altitudeMetersElement = document.getElementById("altitudeMeters");
+      const gpsAltitudeRowElement = document.getElementById("gpsAltitudeRow");
+      const gpsAltitudeMetersElement =
+        document.getElementById("gpsAltitudeMeters");
+      const gpsLatitudeElement = document.getElementById("gpsLatitude");
+      const gpsLongitudeElement = document.getElementById("gpsLongitude");
+      const headerTitleElement = document.getElementById("headerTitle");
+      const turnRateDpsElement = document.getElementById("turnRateDps");
+      const slipBallDegElement = document.getElementById("slipBallDeg");
+      const turnAircraft = document.getElementById("aircraft");
+      const slipBall = document.getElementById("ball");
+      const compassCard = document.getElementById("compassCard");
+      const gpsTrackBug = document.getElementById("gpsTrackBug");
+      const compassMarks = document.getElementById("compassMarks");
+      const compassLabels = document.getElementById("compassLabels");
+      const headingDegElement = document.getElementById("headingDeg");
+      const groundSpeedCanvas = document.getElementById("groundSpeedGauge");
+      const groundSpeedCtx = groundSpeedCanvas.getContext("2d");
+      const groundSpeedKnotsElement =
+        document.getElementById("groundSpeedKnots");
+      const groundSpeedKmhElement = document.getElementById("groundSpeedKmh");
+      const gCurrentValueElement = document.getElementById("gCurrentValue");
+      const gMaxValueElement = document.getElementById("gMaxValue");
+      const gMinValueElement = document.getElementById("gMinValue");
+      const gResetButton = document.getElementById("gResetButton");
+      const mountModeVButton = document.getElementById("mountModeV");
+      const mountModeHButton = document.getElementById("mountModeH");
+      const imuModeToggleButton = document.getElementById("imuModeToggle");
+
+      let socket = null;
+      let received = 0;
+      let displayedAltitudeFeet = 0;
+      let targetAltitudeFeet = 0;
+      let displayedVerticalSpeedFpm = 0;
+      let targetVerticalSpeedFpm = 0;
+      let targetTurnRateDps = 0;
+      let targetSlipBallDeg = 0;
+      let displayedHorizonPitch = 0;
+      let targetHorizonPitch = 0;
+      let displayedHorizonRoll = 0;
+      let targetHorizonRoll = 0;
+      let displayedHeadingDeg = 0;
+      let targetHeadingDeg = 0;
+      let displayedGroundSpeedKnots = 0;
+      let targetGroundSpeedKnots = 0;
+      let manualHeadingDeg = 0;
+      let currentGroundSpeedKmh = 0;
+      let groundSpeedValid = false;
+      let targetGCurrent = 0;
+      let targetGMax = 0;
+      let targetGMin = 0;
+      let lastFrameTime = performance.now();
+
+      const angleForScale = (value) => (value / 10) * Math.PI * 2 - Math.PI / 2;
+      const pointOnCircle = (cx, cy, radius, angle) => ({
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+      });
+
+      function setConnectionState(connected) {
+        connectionElement.className =
+          "connection-led " + (connected ? "connected" : "disconnected");
+        connectionElement.setAttribute(
+          "aria-label",
+          connected ? "WebSocket conectado" : "WebSocket desconectado",
+        );
+        connectionElement.title = connected
+          ? "WebSocket conectado"
+          : "WebSocket desconectado";
+        qnhUpButton.disabled = !connected;
+        qnhDownButton.disabled = !connected;
+        pitchOffsetUpButton.disabled = !connected;
+        pitchOffsetDownButton.disabled = !connected;
+        headingOffsetUpButton.disabled = !connected;
+        headingOffsetDownButton.disabled = !connected;
+        gResetButton.disabled = !connected;
+        mountModeVButton.disabled = !connected;
+        mountModeHButton.disabled = !connected;
+        imuModeToggleButton.disabled = !connected;
+
+        recordButton.disabled = !connected;
+
+        /*
+         * El fichero no se descarga durante una grabación.
+         */
+        downloadButton.disabled =
+          !connected || loggerRecording || !loggerFileAvailable;
+      }
+
+      function drawNeedle(cx, cy, angle, length, width, longNeedle) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        const tail = longNeedle ? 26 : 18;
+        const tipWidth = width * 0.58;
+        ctx.beginPath();
+        ctx.moveTo(-tail, -width * 0.45);
+        ctx.lineTo(length - 18, -width / 2);
+        ctx.lineTo(length, -tipWidth / 2);
+        ctx.lineTo(length, tipWidth / 2);
+        ctx.lineTo(length - 18, width / 2);
+        ctx.lineTo(-tail, width * 0.45);
+        ctx.closePath();
+        const gradient = ctx.createLinearGradient(-tail, 0, length, 0);
+        gradient.addColorStop(0, "#b9bec4");
+        gradient.addColorStop(0.45, "#fff");
+        gradient.addColorStop(1, "#d5d9dd");
+        ctx.fillStyle = gradient;
+        ctx.shadowColor = "rgba(0,0,0,.8)";
+        ctx.shadowBlur = 7;
+        ctx.shadowOffsetY = 4;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#1b1e21";
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawAltimeter(altitudeFeet) {
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const outerRadius = Math.min(w, h) * 0.46;
+        const dialRadius = outerRadius * 0.87;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const bezel = ctx.createRadialGradient(
+          cx - outerRadius * 0.25,
+          cy - outerRadius * 0.28,
+          outerRadius * 0.2,
+          cx,
+          cy,
+          outerRadius,
+        );
+        bezel.addColorStop(0, "#41474d");
+        bezel.addColorStop(0.5, "#15191d");
+        bezel.addColorStop(1, "#040607");
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+        ctx.fillStyle = bezel;
+        ctx.shadowColor = "rgba(0,0,0,.7)";
+        ctx.shadowBlur = 25;
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerRadius * 0.94, 0, Math.PI * 2);
+        ctx.fillStyle = "#050708";
+        ctx.fill();
+
+        const face = ctx.createRadialGradient(
+          cx - 80,
+          cy - 90,
+          10,
+          cx,
+          cy,
+          dialRadius,
+        );
+        face.addColorStop(0, "#282b2e");
+        face.addColorStop(1, "#101214");
+        ctx.beginPath();
+        ctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
+        ctx.fillStyle = face;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#4d5358";
+        ctx.stroke();
+
+        for (let i = 0; i < 100; i++) {
+          const angle = (i / 100) * Math.PI * 2 - Math.PI / 2;
+          const major = i % 10 === 0;
+          const medium = i % 5 === 0;
+          const outer = dialRadius * 0.95;
+          const inner = major
+            ? dialRadius * 0.83
+            : medium
+              ? dialRadius * 0.865
+              : dialRadius * 0.89;
+          const p1 = pointOnCircle(cx, cy, inner, angle);
+          const p2 = pointOnCircle(cx, cy, outer, angle);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.strokeStyle = "#f5f5f5";
+          ctx.lineWidth = major ? 7 : medium ? 4 : 2.3;
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "#f3f3f3";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "58px Arial";
+        for (let n = 0; n <= 9; n++) {
+          const p = pointOnCircle(cx, cy, dialRadius * 0.7, angleForScale(n));
+          ctx.fillText(String(n), p.x, p.y);
+        }
+
+        ctx.font = "48px Arial";
+        ctx.fillText("ALT", cx, cy - 72);
+
+        ctx.font = "26px Arial";
+        ctx.fillStyle = "#f3f3f3";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.fillText("x 1000 ft", cx, cy + dialRadius * 0.3);
+
+        const triangleY = cy - dialRadius * 0.92;
+        ctx.beginPath();
+        ctx.moveTo(cx, triangleY + 34);
+        ctx.lineTo(cx - 24, triangleY);
+        ctx.lineTo(cx + 24, triangleY);
+        ctx.closePath();
+        ctx.fillStyle = "#f5f5f5";
+        ctx.fill();
+
+        const hundreds = (altitudeFeet % 1000) / 100;
+        const thousands = (altitudeFeet % 10000) / 1000;
+
+        drawNeedle(
+          cx,
+          cy,
+          angleForScale(thousands),
+          dialRadius * 0.55,
+          23,
+          false,
+        );
+        drawNeedle(
+          cx,
+          cy,
+          angleForScale(hundreds),
+          dialRadius * 0.82,
+          23,
+          true,
+        );
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 27, 0, Math.PI * 2);
+        const hub = ctx.createRadialGradient(cx - 8, cy - 8, 3, cx, cy, 27);
+        hub.addColorStop(0, "#70767c");
+        hub.addColorStop(0.45, "#2b2f33");
+        hub.addColorStop(1, "#090b0d");
+        ctx.fillStyle = hub;
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#070809";
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.fillStyle = "#0c0e10";
+        ctx.fill();
+      }
+
+      function variometerAngle(verticalSpeedFpm) {
+        const limited = Math.max(-2000, Math.min(2000, verticalSpeedFpm));
+        return Math.PI + (limited / 2000) * Math.PI;
+      }
+
+      function drawVariometerNeedle(cx, cy, angle, length, width) {
+        const vctx = variometerCtx;
+        vctx.save();
+        vctx.translate(cx, cy);
+        vctx.rotate(angle);
+
+        vctx.beginPath();
+        vctx.moveTo(-34, -width * 0.42);
+        vctx.lineTo(length - 18, -width / 2);
+        vctx.lineTo(length, 0);
+        vctx.lineTo(length - 18, width / 2);
+        vctx.lineTo(-34, width * 0.42);
+        vctx.closePath();
+
+        const gradient = vctx.createLinearGradient(-34, 0, length, 0);
+        gradient.addColorStop(0, "#b9bec4");
+        gradient.addColorStop(0.45, "#ffffff");
+        gradient.addColorStop(1, "#d5d9dd");
+        vctx.fillStyle = gradient;
+        vctx.shadowColor = "rgba(0,0,0,.8)";
+        vctx.shadowBlur = 7;
+        vctx.shadowOffsetY = 4;
+        vctx.fill();
+        vctx.lineWidth = 2;
+        vctx.strokeStyle = "#1b1e21";
+        vctx.stroke();
+        vctx.restore();
+      }
+
+      function drawVariometer(verticalSpeedFpm) {
+        const vctx = variometerCtx;
+        const w = variometerCanvas.width;
+        const h = variometerCanvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const outerRadius = Math.min(w, h) * 0.46;
+        const dialRadius = outerRadius * 0.87;
+
+        vctx.clearRect(0, 0, w, h);
+
+        const bezel = vctx.createRadialGradient(
+          cx - outerRadius * 0.25,
+          cy - outerRadius * 0.28,
+          outerRadius * 0.2,
+          cx,
+          cy,
+          outerRadius,
+        );
+        bezel.addColorStop(0, "#41474d");
+        bezel.addColorStop(0.5, "#15191d");
+        bezel.addColorStop(1, "#040607");
+        vctx.beginPath();
+        vctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+        vctx.fillStyle = bezel;
+        vctx.shadowColor = "rgba(0,0,0,.7)";
+        vctx.shadowBlur = 25;
+        vctx.fill();
+
+        vctx.shadowBlur = 0;
+        vctx.beginPath();
+        vctx.arc(cx, cy, outerRadius * 0.94, 0, Math.PI * 2);
+        vctx.fillStyle = "#050708";
+        vctx.fill();
+
+        const face = vctx.createRadialGradient(
+          cx - 80,
+          cy - 90,
+          10,
+          cx,
+          cy,
+          dialRadius,
+        );
+        face.addColorStop(0, "#282b2e");
+        face.addColorStop(1, "#101214");
+        vctx.beginPath();
+        vctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
+        vctx.fillStyle = face;
+        vctx.fill();
+        vctx.lineWidth = 3;
+        vctx.strokeStyle = "#4d5358";
+        vctx.stroke();
+
+        /* 80 divisiones: 0..+20 por arriba y 0..-20 por abajo. */
+        for (let i = 0; i < 80; i++) {
+          const angle = Math.PI + (i / 80) * Math.PI * 2;
+          const major = i % 10 === 0;
+          const medium = i % 5 === 0;
+          const outer = dialRadius * 0.95;
+          const inner = major
+            ? dialRadius * 0.82
+            : medium
+              ? dialRadius * 0.86
+              : dialRadius * 0.89;
+          const p1 = pointOnCircle(cx, cy, inner, angle);
+          const p2 = pointOnCircle(cx, cy, outer, angle);
+          vctx.beginPath();
+          vctx.moveTo(p1.x, p1.y);
+          vctx.lineTo(p2.x, p2.y);
+          vctx.strokeStyle = "#f5f5f5";
+          vctx.lineWidth = major ? 7 : medium ? 4 : 2.3;
+          vctx.stroke();
+        }
+
+        vctx.fillStyle = "#f3f3f3";
+        vctx.textAlign = "center";
+        vctx.textBaseline = "middle";
+        vctx.font = "48px Arial";
+
+        const labels = [
+          { value: 0, text: "0" },
+          { value: 500, text: "5" },
+          { value: 1000, text: "10" },
+          { value: 1500, text: "15" },
+          { value: 2000, text: "20" },
+          { value: -500, text: "5" },
+          { value: -1000, text: "10" },
+          { value: -1500, text: "15" },
+        ];
+
+        for (const label of labels) {
+          const p = pointOnCircle(
+            cx,
+            cy,
+            dialRadius * 0.69,
+            variometerAngle(label.value),
+          );
+          vctx.fillText(label.text, p.x, p.y);
+        }
+
+        vctx.font = "34px Arial";
+        vctx.fillText("VERTICAL", cx, cy - 82);
+        vctx.fillText("SPEED", cx, cy - 43);
+        vctx.font = "22px Arial";
+        vctx.fillText("x 100 ft/min", cx, cy + dialRadius * 0.35);
+
+        vctx.font = "22px Arial";
+        vctx.textAlign = "left";
+        vctx.fillText("UP", cx - dialRadius * 0.49, cy - 56);
+        vctx.fillText("DOWN", cx - dialRadius * 0.49, cy + 58);
+
+        vctx.strokeStyle = "#f3f3f3";
+        vctx.fillStyle = "#f3f3f3";
+        vctx.lineWidth = 4;
+        const arrowX = cx - dialRadius * 0.58;
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy - 18);
+        vctx.lineTo(arrowX, cy - 70);
+        vctx.stroke();
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy - 78);
+        vctx.lineTo(arrowX - 9, cy - 59);
+        vctx.lineTo(arrowX + 9, cy - 59);
+        vctx.closePath();
+        vctx.fill();
+
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy + 18);
+        vctx.lineTo(arrowX, cy + 70);
+        vctx.stroke();
+        vctx.beginPath();
+        vctx.moveTo(arrowX, cy + 78);
+        vctx.lineTo(arrowX - 9, cy + 59);
+        vctx.lineTo(arrowX + 9, cy + 59);
+        vctx.closePath();
+        vctx.fill();
+
+        drawVariometerNeedle(
+          cx,
+          cy,
+          variometerAngle(verticalSpeedFpm),
+          dialRadius * 0.78,
+          18,
+        );
+
+        vctx.beginPath();
+        vctx.arc(cx, cy, 27, 0, Math.PI * 2);
+        const hub = vctx.createRadialGradient(cx - 8, cy - 8, 3, cx, cy, 27);
+        hub.addColorStop(0, "#70767c");
+        hub.addColorStop(0.45, "#2b2f33");
+        hub.addColorStop(1, "#090b0d");
+        vctx.fillStyle = hub;
+        vctx.fill();
+        vctx.lineWidth = 4;
+        vctx.strokeStyle = "#070809";
+        vctx.stroke();
+        vctx.beginPath();
+        vctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        vctx.fillStyle = "#0c0e10";
+        vctx.fill();
+      }
+
+      function turnAircraftAngle(rateDps) {
+        /* ±3 °/s corresponde aproximadamente a ±25° visuales. */
+        return Math.max(-50, Math.min(50, (rateDps / 3) * 25));
+      }
+
+      function slipBallPosition(slipBallDeg) {
+        const normalized = Math.max(-1, Math.min(1, slipBallDeg / 25));
+
+        return {
+          x: normalized * 112,
+          y: -10 * normalized * normalized,
+        };
+      }
+
+      function updateTurnCoordinator(turnRateDps, slipBallDeg) {
+        const aircraftAngle = turnAircraftAngle(turnRateDps);
+        const ballPosition = slipBallPosition(slipBallDeg);
+
+        turnAircraft.setAttribute(
+          "transform",
+          `rotate(${aircraftAngle.toFixed(2)} 400 400)`,
+        );
+
+        slipBall.setAttribute(
+          "transform",
+          `translate(${ballPosition.x.toFixed(2)} ${ballPosition.y.toFixed(2)})`,
+        );
+
+        turnRateDpsElement.textContent = turnRateDps.toFixed(2);
+        slipBallDegElement.textContent = slipBallDeg.toFixed(1);
+      }
+
+      const hW = horizonCanvas.width;
+      const hH = horizonCanvas.height;
+      const hCx = hW / 2;
+      const hCy = hH / 2;
+
+      /*
+       * Horizonte artificial ampliado:
+       * se elimina visualmente la corona exterior y la esfera móvil aprovecha
+       * casi todo el diámetro disponible del canvas.
+       */
+      const screenRadius = 455;
+      const bezelOuter = 468;
+      const bezelInner = 460;
+      const pixelsPerDegree = 10.2;
+      function horizonDegToRad(deg) {
+        return (deg * Math.PI) / 180;
+      }
+
+      function formatAngle(value) {
+        const n = Math.round(value);
+        return `${n > 0 ? "+" : ""}${n}°`;
+      }
+
+      function shortestAngleDifference(target, current) {
+        return ((target - current + 540) % 360) - 180;
+      }
+
+      function drawHorizonBezel() {
+        horizonCtx.save();
+
+        /*
+         * Un único aro periférico muy estrecho. Se suprime el grueso bisel
+         * negro/gris original para entregar ese diámetro a la esfera.
+         */
+        horizonCtx.beginPath();
+        horizonCtx.arc(hCx, hCy, bezelOuter, 0, Math.PI * 2);
+        horizonCtx.fillStyle = "#050608";
+        horizonCtx.fill();
+
+        horizonCtx.lineWidth = 6;
+        horizonCtx.strokeStyle = "#34383e";
+        horizonCtx.stroke();
+
+        horizonCtx.restore();
+      }
+
+      function drawHorizonPitchLadder() {
+        horizonCtx.save();
+
+        horizonCtx.strokeStyle = "#fff";
+        horizonCtx.fillStyle = "#fff";
+        horizonCtx.lineWidth = 7;
+        horizonCtx.lineCap = "round";
+        horizonCtx.textAlign = "center";
+        horizonCtx.textBaseline = "middle";
+        horizonCtx.font = "bold 34px Arial";
+
+        for (let angle = -80; angle <= 80; angle += 5) {
+          if (angle === 0) continue;
+
+          const y = -angle * pixelsPerDegree;
+          const absAngle = Math.abs(angle);
+          const major = absAngle % 10 === 0;
+          const halfWidth = major ? 92 : 38;
+
+          horizonCtx.beginPath();
+          horizonCtx.moveTo(-halfWidth, y);
+          horizonCtx.lineTo(halfWidth, y);
+          horizonCtx.stroke();
+
+          if (major && absAngle <= 50) {
+            horizonCtx.fillText(String(absAngle), -132, y);
+            horizonCtx.fillText(String(absAngle), 132, y);
+          }
+        }
+
+        horizonCtx.restore();
+      }
+
+      function drawHorizonGroundPerspective() {
+        horizonCtx.save();
+
+        horizonCtx.strokeStyle = "rgba(255,255,255,.92)";
+        horizonCtx.lineWidth = 4;
+        horizonCtx.lineCap = "round";
+
+        /*
+         * Las líneas parten del centro del horizonte y se abren
+         * hasta la circunferencia inferior del instrumento.
+         */
+        const endAngles = [28, 47, 66, 114, 133, 152];
+
+        for (const a of endAngles) {
+          const rad = horizonDegToRad(a);
+          const x = Math.cos(rad) * screenRadius;
+          const y = Math.sin(rad) * screenRadius;
+
+          horizonCtx.beginPath();
+          horizonCtx.moveTo(0, 0);
+          horizonCtx.lineTo(x, y);
+          horizonCtx.stroke();
+        }
+
+        horizonCtx.restore();
+      }
+
+      function drawHorizonMovingSphere(pitch, roll) {
+        horizonCtx.save();
+
+        horizonCtx.beginPath();
+        horizonCtx.arc(hCx, hCy, screenRadius, 0, Math.PI * 2);
+        horizonCtx.clip();
+
+        horizonCtx.translate(hCx, hCy);
+        horizonCtx.rotate(horizonDegToRad(-roll));
+        horizonCtx.translate(0, pitch * pixelsPerDegree);
+
+        const ext = 1900;
+
+        const sky = horizonCtx.createLinearGradient(0, -950, 0, 0);
+        sky.addColorStop(0, "#0062ad");
+        sky.addColorStop(0.55, "#218fd3");
+        sky.addColorStop(1, "#66c6ef");
+        horizonCtx.fillStyle = sky;
+        horizonCtx.fillRect(-ext, -ext, ext * 2, ext);
+
+        const earth = horizonCtx.createLinearGradient(0, 0, 0, 1000);
+        earth.addColorStop(0, "#875635");
+        earth.addColorStop(1, "#2c190f");
+        horizonCtx.fillStyle = earth;
+        horizonCtx.fillRect(-ext, 0, ext * 2, ext);
+
+        // Horizonte
+        horizonCtx.fillStyle = "#fff";
+        horizonCtx.fillRect(-ext, -7, ext * 2, 14);
+
+        // Perspectiva en la zona marrón
+        drawHorizonGroundPerspective();
+
+        // Escala de pitch
+        drawHorizonPitchLadder();
+
+        horizonCtx.restore();
+
+        // Reflejo del cristal
+        horizonCtx.save();
+        horizonCtx.beginPath();
+        horizonCtx.arc(hCx, hCy, screenRadius, 0, Math.PI * 2);
+        horizonCtx.clip();
+
+        const glass = horizonCtx.createRadialGradient(
+          hCx - 95,
+          hCy - 125,
+          20,
+          hCx,
+          hCy,
+          screenRadius,
+        );
+        glass.addColorStop(0, "rgba(255,255,255,.12)");
+        glass.addColorStop(0.58, "rgba(255,255,255,.025)");
+        glass.addColorStop(1, "rgba(0,0,0,.18)");
+
+        horizonCtx.fillStyle = glass;
+        horizonCtx.fillRect(
+          hCx - screenRadius,
+          hCy - screenRadius,
+          screenRadius * 2,
+          screenRadius * 2,
+        );
+
+        horizonCtx.restore();
+      }
+
+      function drawHorizonBankScale(roll) {
+        horizonCtx.save();
+
+        /*
+         * Índice amarillo móvil.
+         *
+         * La línea de horizonte gira -roll grados. El triángulo gira y se
+         * desplaza sobre la circunferencia con la misma transformación, por lo
+         * que su eje permanece perpendicular a la línea de horizonte.
+         */
+        horizonCtx.save();
+        horizonCtx.translate(hCx, hCy);
+        horizonCtx.rotate(horizonDegToRad(-roll));
+
+        horizonCtx.fillStyle = "#ffe400";
+        horizonCtx.beginPath();
+        horizonCtx.moveTo(0, -screenRadius + 16);
+        horizonCtx.lineTo(-14, -screenRadius + 48);
+        horizonCtx.lineTo(14, -screenRadius + 48);
+        horizonCtx.closePath();
+        horizonCtx.fill();
+
+        horizonCtx.restore();
+
+        // Marcas blancas, sin puntos ni números
+        const marks = [
+          { angle: -90, length: 53, width: 9 },
+          { angle: -60, length: 45, width: 8 },
+          { angle: -45, length: 38, width: 8 },
+          { angle: -30, length: 50, width: 9 },
+          { angle: -20, length: 42, width: 8 },
+          { angle: -10, length: 42, width: 8 },
+          { angle: 10, length: 42, width: 8 },
+          { angle: 20, length: 42, width: 8 },
+          { angle: 30, length: 50, width: 9 },
+          { angle: 45, length: 38, width: 8 },
+          { angle: 60, length: 45, width: 8 },
+          { angle: 90, length: 53, width: 9 },
+        ];
+
+        horizonCtx.strokeStyle = "#fff";
+        horizonCtx.lineCap = "butt";
+
+        for (const mark of marks) {
+          const a = horizonDegToRad(mark.angle - 90);
+          const r1 = screenRadius - 3;
+          const r2 = r1 - mark.length;
+
+          horizonCtx.lineWidth = mark.width;
+          horizonCtx.beginPath();
+          horizonCtx.moveTo(hCx + Math.cos(a) * r1, hCy + Math.sin(a) * r1);
+          horizonCtx.lineTo(hCx + Math.cos(a) * r2, hCy + Math.sin(a) * r2);
+          horizonCtx.stroke();
+        }
+
+        horizonCtx.restore();
+      }
+
+      function drawHorizonAircraftSymbol() {
+        horizonCtx.save();
+
+        horizonCtx.strokeStyle = "#ffe500";
+        horizonCtx.fillStyle = "#ffe500";
+        horizonCtx.lineWidth = 12;
+        horizonCtx.lineCap = "round";
+        horizonCtx.lineJoin = "round";
+
+        /*
+         * Avión fijo más esbelto. Las alas permanecen horizontales y la
+         * esfera móvil pasa libremente por detrás.
+         */
+        horizonCtx.beginPath();
+        horizonCtx.moveTo(hCx - 235, hCy);
+        horizonCtx.lineTo(hCx - 68, hCy);
+        horizonCtx.quadraticCurveTo(hCx - 54, hCy + 42, hCx, hCy + 42);
+        horizonCtx.quadraticCurveTo(hCx + 54, hCy + 42, hCx + 68, hCy);
+        horizonCtx.lineTo(hCx + 235, hCy);
+        horizonCtx.stroke();
+
+        horizonCtx.beginPath();
+        horizonCtx.arc(hCx, hCy, 8, 0, Math.PI * 2);
+        horizonCtx.fill();
+
+        horizonCtx.restore();
+      }
+
+      function drawHorizonKnob() {
+        const y = hCy + 395;
+
+        const g = horizonCtx.createRadialGradient(
+          hCx - 12,
+          y - 14,
+          8,
+          hCx,
+          y,
+          55,
+        );
+        g.addColorStop(0, "#383c42");
+        g.addColorStop(1, "#111317");
+
+        horizonCtx.beginPath();
+        horizonCtx.arc(hCx, y, 55, 0, Math.PI * 2);
+        horizonCtx.fillStyle = g;
+        horizonCtx.fill();
+
+        horizonCtx.lineWidth = 7;
+        horizonCtx.strokeStyle = "#050607";
+        horizonCtx.stroke();
+
+        horizonCtx.beginPath();
+        horizonCtx.arc(hCx, y, 39, 0, Math.PI * 2);
+        horizonCtx.fillStyle = "#202328";
+        horizonCtx.fill();
+
+        horizonCtx.lineWidth = 3;
+        horizonCtx.strokeStyle = "#3e434a";
+        horizonCtx.stroke();
+      }
+
+      function drawHorizonFrame() {
+        horizonCtx.clearRect(0, 0, hW, hH);
+        drawHorizonBezel();
+        drawHorizonMovingSphere(displayedHorizonPitch, displayedHorizonRoll);
+        drawHorizonBankScale(displayedHorizonRoll);
+        drawHorizonAircraftSymbol();
+      }
+
+      const SVG_NS = "http://www.w3.org/2000/svg";
+
+      function normalizeHeading(value) {
+        let heading = Number(value);
+        if (!Number.isFinite(heading)) heading = 0;
+        heading %= 360;
+        if (heading < 0) heading += 360;
+        return heading;
+      }
+
+      function compassPolar(cx, cy, radius, angleDeg) {
+        const angle = ((angleDeg - 90) * Math.PI) / 180;
+        return {
+          x: cx + radius * Math.cos(angle),
+          y: cy + radius * Math.sin(angle),
+        };
+      }
+
+      function createCompassRose() {
+        for (let heading = 0; heading < 360; heading += 5) {
+          const major = heading % 30 === 0;
+          const medium = heading % 10 === 0;
+          const outer = compassPolar(200, 200, 166, heading);
+          const inner = compassPolar(
+            200,
+            200,
+            major ? 139 : medium ? 147 : 154,
+            heading,
+          );
+
+          const line = document.createElementNS(SVG_NS, "line");
+          line.setAttribute("x1", inner.x);
+          line.setAttribute("y1", inner.y);
+          line.setAttribute("x2", outer.x);
+          line.setAttribute("y2", outer.y);
+          line.setAttribute("stroke", "#f2f2f2");
+          line.setAttribute(
+            "stroke-width",
+            major ? "5" : medium ? "3.5" : "2.5",
+          );
+          line.setAttribute("stroke-linecap", "round");
+          compassMarks.appendChild(line);
+        }
+
+        for (let heading = 0; heading < 360; heading += 30) {
+          const pos = compassPolar(200, 200, 120, heading);
+          const node = document.createElementNS(SVG_NS, "text");
+          node.setAttribute("x", pos.x);
+          node.setAttribute("y", pos.y);
+          node.setAttribute("fill", "#f2f2f2");
+          node.setAttribute("font-size", "25");
+          node.setAttribute("font-family", "Arial, Helvetica, sans-serif");
+          node.setAttribute("font-weight", "700");
+          node.setAttribute("text-anchor", "middle");
+          node.setAttribute("dominant-baseline", "middle");
+          node.setAttribute(
+            "transform",
+            `rotate(${heading} ${pos.x} ${pos.y})`,
+          );
+          node.textContent = heading === 0 ? "0" : String(heading / 10);
+          compassLabels.appendChild(node);
+        }
+      }
+
+      function updateHeadingInstrument(headingDeg) {
+        const normalized = normalizeHeading(headingDeg);
+
+        /*
+         * La rosa representa el último heading válido del GPS.
+         * Si todavía no ha existido ninguno, websocket.c envía 0°.
+         */
+        compassCard.style.transform = `rotate(${-normalized}deg)`;
+
+        headingDegElement.textContent = String(
+          Math.round(normalized) % 360,
+        ).padStart(3, "0");
+
+        /*
+         * Triángulo amarillo = heading manual persistente.
+         *
+         *      angulo_bug = heading_manual - heading_GPS
+         *
+         * Con ambos iguales queda a las 12.
+         */
+        let relativeManual = normalizeHeading(manualHeadingDeg - normalized);
+        if (relativeManual > 180) relativeManual -= 360;
+
+        gpsTrackBug.style.transform = `rotate(${relativeManual}deg)`;
+        gpsTrackBug.classList.add("visible");
+      }
+
+      const GROUND_SPEED_MIN_KT = 0;
+      const GROUND_SPEED_MAX_KT = 160;
+      const GROUND_SPEED_START_DEG = 130;
+      const GROUND_SPEED_END_DEG = 410;
+
+      function groundSpeedValueToAngle(valueKt) {
+        const limited = Math.max(
+          GROUND_SPEED_MIN_KT,
+          Math.min(GROUND_SPEED_MAX_KT, valueKt),
+        );
+        return (
+          GROUND_SPEED_START_DEG +
+          ((limited - GROUND_SPEED_MIN_KT) /
+            (GROUND_SPEED_MAX_KT - GROUND_SPEED_MIN_KT)) *
+            (GROUND_SPEED_END_DEG - GROUND_SPEED_START_DEG)
+        );
+      }
+
+      function drawGroundSpeedGauge(speedKt, valid) {
+        const ctx = groundSpeedCtx;
+        const w = groundSpeedCanvas.width;
+        const h = groundSpeedCanvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+
+        ctx.clearRect(0, 0, w, h);
+
+        /*
+         * Indicador GS completamente circular:
+         * - sin marco octogonal
+         * - sin tornillos decorativos
+         * - esfera ampliada para aprovechar prácticamente todo el canvas
+         *   y aproximarse al tamaño visual del girodireccional.
+         */
+        /*
+         * Radio exterior ajustado para igualar visualmente el diámetro
+         * del bisel principal del Turn Coordinator:
+         * r = 375 sobre viewBox 800  ->  375/800 = 0.46875.
+         */
+        const outerRadius = Math.min(w, h) * 0.46875;
+        const dialRadius = outerRadius * 0.91;
+
+        /* Bisel exterior circular. */
+        const bezel = ctx.createRadialGradient(
+          cx - outerRadius * 0.22,
+          cy - outerRadius * 0.26,
+          outerRadius * 0.12,
+          cx,
+          cy,
+          outerRadius,
+        );
+        bezel.addColorStop(0, "#4b5055");
+        bezel.addColorStop(0.48, "#202428");
+        bezel.addColorStop(0.82, "#0b0e10");
+        bezel.addColorStop(1, "#030405");
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+        ctx.fillStyle = bezel;
+        ctx.shadowColor = "rgba(0,0,0,.78)";
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 7;
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = "#777d82";
+        ctx.stroke();
+
+        /* Anillo interior. */
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerRadius * 0.955, 0, Math.PI * 2);
+        ctx.fillStyle = "#050708";
+        ctx.fill();
+
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#191d20";
+        ctx.stroke();
+
+        /* Esfera negra. */
+        const face = ctx.createRadialGradient(
+          cx - dialRadius * 0.2,
+          cy - dialRadius * 0.22,
+          dialRadius * 0.06,
+          cx,
+          cy,
+          dialRadius,
+        );
+        face.addColorStop(0, "#24282c");
+        face.addColorStop(0.56, "#111416");
+        face.addColorStop(1, "#060809");
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
+        ctx.fillStyle = face;
+        ctx.fill();
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#3f454a";
+        ctx.stroke();
+
+        /*
+         * Escala 0..160 kt.
+         * Divisiones menores: 5 kt
+         * Divisiones medias: 10 kt
+         * Divisiones mayores y números: 20 kt
+         */
+        for (let value = 0; value <= 160; value += 5) {
+          const angle = (groundSpeedValueToAngle(value) * Math.PI) / 180;
+
+          const major = value % 20 === 0;
+          const medium = !major && value % 10 === 0;
+
+          const rOuter = dialRadius * 0.94;
+          const rInner = major
+            ? dialRadius * 0.79
+            : medium
+              ? dialRadius * 0.83
+              : dialRadius * 0.865;
+
+          ctx.beginPath();
+          ctx.moveTo(
+            cx + rInner * Math.cos(angle),
+            cy + rInner * Math.sin(angle),
+          );
+          ctx.lineTo(
+            cx + rOuter * Math.cos(angle),
+            cy + rOuter * Math.sin(angle),
+          );
+
+          ctx.strokeStyle = "#f5f5f5";
+          ctx.lineWidth = major ? 7 : medium ? 4 : 2.6;
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
+
+        /* Numeración cada 20 kt. */
+        ctx.fillStyle = "#f4f4f4";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "700 38px Arial";
+
+        for (let value = 0; value <= 160; value += 20) {
+          const angle = (groundSpeedValueToAngle(value) * Math.PI) / 180;
+
+          const radius = dialRadius * 0.64;
+
+          ctx.fillText(
+            String(value),
+            cx + radius * Math.cos(angle),
+            cy + radius * Math.sin(angle),
+          );
+        }
+
+        /* Nombre del instrumento por encima del eje. */
+        ctx.fillStyle = "#f4f4f4";
+        ctx.font = "600 28px Arial";
+        ctx.fillText("GROUND", cx, cy - dialRadius * 0.29);
+        ctx.fillText("SPEED", cx, cy - dialRadius * 0.2);
+
+        /*
+         * KNOTS debajo del eje de la aguja.
+         */
+        ctx.fillStyle = "#c7cdd2";
+        ctx.font = "500 23px Arial";
+        ctx.fillText("KNOTS", cx, cy + dialRadius * 0.29);
+
+        /*
+         * Aguja.
+         * Sin FIX, se estaciona en 0 kt y se representa atenuada.
+         */
+        const needleAngle =
+          (groundSpeedValueToAngle(valid ? speedKt : 0) * Math.PI) / 180;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(needleAngle);
+
+        /*
+         * Aguja con geometría equivalente a la del VSI:
+         * cuerpo ancho, punta triangular y acabado blanco.
+         */
+        const needleLength = dialRadius * 0.78;
+        const needleWidth = 18;
+        const tailLength = 34;
+
+        ctx.beginPath();
+        ctx.moveTo(-tailLength, -needleWidth * 0.42);
+        ctx.lineTo(needleLength - 18, -needleWidth / 2);
+        ctx.lineTo(needleLength, 0);
+        ctx.lineTo(needleLength - 18, needleWidth / 2);
+        ctx.lineTo(-tailLength, needleWidth * 0.42);
+        ctx.closePath();
+
+        const needleGradient = ctx.createLinearGradient(
+          -tailLength,
+          0,
+          needleLength,
+          0,
+        );
+
+        if (valid) {
+          needleGradient.addColorStop(0, "#b9bec4");
+          needleGradient.addColorStop(0.45, "#ffffff");
+          needleGradient.addColorStop(1, "#d5d9dd");
+        } else {
+          needleGradient.addColorStop(0, "#55595d");
+          needleGradient.addColorStop(0.45, "#777c80");
+          needleGradient.addColorStop(1, "#656a6e");
+        }
+
+        ctx.fillStyle = needleGradient;
+        ctx.shadowColor = "rgba(0,0,0,.8)";
+        ctx.shadowBlur = 7;
+        ctx.shadowOffsetY = 4;
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#1b1e21";
+        ctx.stroke();
+
+        ctx.restore();
+
+        /* Eje central. */
+        ctx.beginPath();
+        ctx.arc(cx, cy, 27, 0, Math.PI * 2);
+        const hub = ctx.createRadialGradient(cx - 8, cy - 8, 3, cx, cy, 27);
+        hub.addColorStop(0, "#777d82");
+        hub.addColorStop(0.45, "#353a3e");
+        hub.addColorStop(1, "#0a0c0e");
+        ctx.fillStyle = hub;
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#08090a";
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.fillStyle = "#101214";
+        ctx.fill();
+
+        if (!valid) {
+          ctx.fillStyle = "#ff7777";
+          ctx.font = "700 20px Arial";
+          ctx.fillText("NO GPS FIX", cx, cy + dialRadius * 0.48);
+        }
+      }
+
+      function updateGText(current, maximum, minimum) {
+        gCurrentValueElement.textContent = current.toFixed(2);
+        gMaxValueElement.textContent = maximum.toFixed(2);
+        gMinValueElement.textContent = minimum.toFixed(2);
+      }
+
+      function animateAltimeter(now) {
+        const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+        lastFrameTime = now;
+        const alpha = 1 - Math.exp(-8 * dt);
+        displayedAltitudeFeet +=
+          (targetAltitudeFeet - displayedAltitudeFeet) * alpha;
+        displayedVerticalSpeedFpm +=
+          (targetVerticalSpeedFpm - displayedVerticalSpeedFpm) * alpha;
+        /* Horizonte artificial sin filtrado adicional en el navegador.
+         * Pitch y roll se aplican directamente tal como llegan del ESP32. */
+        displayedHorizonPitch = targetHorizonPitch;
+        displayedHorizonRoll = targetHorizonRoll;
+        displayedHeadingDeg = normalizeHeading(
+          displayedHeadingDeg +
+            shortestAngleDifference(targetHeadingDeg, displayedHeadingDeg) *
+              alpha,
+        );
+        displayedGroundSpeedKnots +=
+          (targetGroundSpeedKnots - displayedGroundSpeedKnots) * alpha;
+
+        if (
+          Math.abs(targetGroundSpeedKnots - displayedGroundSpeedKnots) < 0.02
+        ) {
+          displayedGroundSpeedKnots = targetGroundSpeedKnots;
+        }
+
+        if (Math.abs(targetAltitudeFeet - displayedAltitudeFeet) < 0.02) {
+          displayedAltitudeFeet = targetAltitudeFeet;
+        }
+        if (
+          Math.abs(targetVerticalSpeedFpm - displayedVerticalSpeedFpm) < 0.02
+        ) {
+          displayedVerticalSpeedFpm = targetVerticalSpeedFpm;
+        }
+
+        drawAltimeter(displayedAltitudeFeet);
+        drawVariometer(displayedVerticalSpeedFpm);
+        updateTurnCoordinator(targetTurnRateDps, targetSlipBallDeg);
+        drawHorizonFrame();
+        updateHeadingInstrument(displayedHeadingDeg);
+        drawGroundSpeedGauge(displayedGroundSpeedKnots, groundSpeedValid);
+        updateGText(targetGCurrent, targetGMax, targetGMin);
+
+        groundSpeedKnotsElement.textContent = groundSpeedValid
+          ? displayedGroundSpeedKnots.toFixed(1)
+          : "--";
+        groundSpeedKmhElement.textContent = groundSpeedValid
+          ? currentGroundSpeedKmh.toFixed(1)
+          : "--";
+        horizonPitchDegElement.textContent = displayedHorizonPitch.toFixed(2);
+        horizonRollDegElement.textContent = displayedHorizonRoll.toFixed(2);
+
+        altitudeFeetElement.textContent = Math.round(
+          displayedAltitudeFeet,
+        ).toLocaleString("en-US");
+
+        requestAnimationFrame(animateAltimeter);
+      }
+
+      function updateTelemetry(data) {
+        /*
+         * DataLogger SPIFFS.
+         */
+        loggerRecording = data.recording === true;
+        loggerFileAvailable = data.log_available === true;
+
+        const logSamples = Number(data.log_samples);
+        const logSizeBytes = Number(data.log_size_bytes);
+
+        recordButton.textContent = loggerRecording
+          ? "PARAR GRABACIÓN"
+          : "GRABAR";
+
+        recordButton.classList.toggle("recording", loggerRecording);
+
+        downloadButton.disabled =
+          loggerRecording ||
+          !loggerFileAvailable ||
+          !socket ||
+          socket.readyState !== WebSocket.OPEN;
+
+        const sizeKb = Number.isFinite(logSizeBytes)
+          ? (logSizeBytes / 1024).toFixed(1)
+          : "0.0";
+
+        if (loggerRecording) {
+          loggerStatusElement.textContent = `GRABANDO · ${Number.isFinite(logSamples) ? logSamples : 0} muestras · ${sizeKb} kB`;
+        } else if (loggerFileAvailable) {
+          loggerStatusElement.textContent = `Detenido · ${Number.isFinite(logSamples) ? logSamples : 0} muestras · ${sizeKb} kB disponibles`;
+        } else {
+          loggerStatusElement.textContent = "Registro detenido · Sin fichero";
+        }
+
+        const altitudeMeters = Number(data.altitude);
+        altitudeMetersElement.textContent = Number.isFinite(altitudeMeters)
+          ? Math.round(altitudeMeters).toLocaleString("es-ES").replace(".", "/")
+          : "--";
+
+        /*
+         * Fecha/hora GPS: se muestran siempre que los campos UTC recibidos
+         * sean coherentes, aunque todavía no exista FIX de navegación.
+         * Latitud, longitud y altitud GPS sí requieren FIX válido.
+         */
+        const gpsValid = data.gps_valid === true;
+        const gpsAltitudeM = Number(data.gps_altitude_m);
+        const gpsLatitude = Number(data.gps_latitude_deg);
+        const gpsLongitude = Number(data.gps_longitude_deg);
+        const groundSpeedKnots = Number(data.ground_speed_knots);
+        const groundSpeedKmh = Number(data.ground_speed_kmh);
+
+        groundSpeedValid =
+          gpsValid &&
+          Number.isFinite(groundSpeedKnots) &&
+          Number.isFinite(groundSpeedKmh);
+
+        targetGroundSpeedKnots = groundSpeedValid
+          ? Math.max(
+              GROUND_SPEED_MIN_KT,
+              Math.min(GROUND_SPEED_MAX_KT, groundSpeedKnots),
+            )
+          : 0;
+
+        currentGroundSpeedKmh = groundSpeedValid
+          ? Math.max(0, groundSpeedKmh)
+          : 0;
+
+        gpsAltitudeRowElement.style.display = "block";
+        gpsAltitudeMetersElement.textContent =
+          gpsValid && Number.isFinite(gpsAltitudeM)
+            ? gpsAltitudeM.toFixed(1)
+            : "--";
+
+        gpsLatitudeElement.textContent =
+          gpsValid && Number.isFinite(gpsLatitude)
+            ? gpsLatitude.toFixed(6)
+            : "--";
+
+        gpsLongitudeElement.textContent =
+          gpsValid && Number.isFinite(gpsLongitude)
+            ? gpsLongitude.toFixed(6)
+            : "--";
+
+        /*
+         * El ESP32-S3 envía la fecha/hora GPS compactada como Unix timestamp
+         * UTC [s]. El navegador se encarga de convertirla a calendario.
+         */
+        const utcTimestamp = Number(data.gps_utc);
+        const utcValid =
+          Number.isInteger(utcTimestamp) && utcTimestamp > 0;
+
+        if (utcValid) {
+          const utcDate = new Date(utcTimestamp * 1000);
+          const pad2 = (value) => String(value).padStart(2, "0");
+
+          const day = utcDate.getUTCDate();
+          const month = utcDate.getUTCMonth() + 1;
+          const year = utcDate.getUTCFullYear();
+          const hour = utcDate.getUTCHours();
+          const minute = utcDate.getUTCMinutes();
+          const second = utcDate.getUTCSeconds();
+
+          headerTitleElement.textContent =
+            `ULM-EFIS · ${pad2(day)}/${pad2(month)}/${year} ` +
+            `${pad2(hour)}:${pad2(minute)}:${pad2(second)} UTC · ` +
+            (gpsValid ? "GPS FIX" : "GPS SIN FIX");
+        } else {
+          headerTitleElement.textContent = gpsValid
+            ? "ULM-EFIS · GPS FIX · Esperando fecha/hora..."
+            : "ULM-EFIS · Esperando fecha/hora GPS...";
+        }
+
+        const temperatureC = Number(data.temperature);
+        document.getElementById("temperature").textContent = Number.isFinite(
+          temperatureC,
+        )
+          ? temperatureC.toFixed(2)
+          : "--";
+
+        document.getElementById("counter").textContent = data.counter;
+        document.getElementById("qnh").textContent = data.qnh.toFixed(2);
+        document.getElementById("time").textContent =
+          `t = ${data.time_s.toFixed(4)} s`;
+
+        const pitchOffsetDeg = Number(data.pitch_offset_deg ?? 0);
+        const headingOffsetDeg = Number(data.heading_offset_deg ?? 0);
+        const mountMode = Number(data.mount_mode ?? 0);
+
+        mountModeVButton.classList.toggle("active", mountMode === 0);
+        mountModeHButton.classList.toggle("active", mountMode === 1);
+
+        const imuMode = Number(data.imu_mode ?? 0);
+        const imuIsNdof = imuMode === 1;
+
+        imuModeToggleButton.textContent =
+          imuIsNdof ? "IMU · NDOF" : "IMU · AMG";
+        imuModeToggleButton.classList.toggle("ndof", imuIsNdof);
+        imuModeToggleButton.classList.toggle("amg", !imuIsNdof);
+
+        pitchOffsetDegElement.textContent = String(Math.round(pitchOffsetDeg));
+
+        /*
+         * Se mantiene el nombre JSON heading_offset_deg para no romper la
+         * interfaz existente, pero desde ahora su significado es un heading
+         * manual absoluto, persistente entre arranques.
+         */
+        manualHeadingDeg = normalizeHeading(headingOffsetDeg);
+        headingOffsetDegElement.textContent = String(
+          Math.round(manualHeadingDeg),
+        );
+
+        targetHorizonPitch = Math.max(
+          -90,
+          Math.min(90, Number(data.pitch ?? 0) + pitchOffsetDeg),
+        );
+        targetHorizonRoll = Math.max(
+          -180,
+          Math.min(180, Number(data.roll ?? 0)),
+        );
+
+        /* El girodireccional usa exclusivamente el heading GPS retenido. */
+        targetHeadingDeg = normalizeHeading(Number(data.yaw ?? 0));
+
+        /* La telemetría entrega altitud en metros y velocidad vertical en m/s. */
+        targetAltitudeFeet = Math.max(0, data.altitude * 3.280839895);
+        targetVerticalSpeedFpm = Math.max(
+          -2000,
+          Math.min(2000, data.vertical_speed * 196.850394),
+        );
+
+        targetTurnRateDps = Math.max(
+          -6,
+          Math.min(6, Number(data.turn_rate_dps ?? 0)),
+        );
+        targetSlipBallDeg = Math.max(
+          -25,
+          Math.min(25, Number(data.slip_ball_deg ?? 0)),
+        );
+
+        targetGCurrent = Number(data.g_current ?? 0);
+        targetGMax = Number(data.g_max ?? 0);
+        targetGMin = Number(data.g_min ?? 0);
+
+        if (!Number.isFinite(targetGCurrent)) targetGCurrent = 0;
+        if (!Number.isFinite(targetGMax)) targetGMax = 0;
+        if (!Number.isFinite(targetGMin)) targetGMin = 0;
+      }
+
+      function sendCommand(command) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(command);
+        }
+      }
+
+      function connect() {
+        const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+        socket = new WebSocket(`${protocol}//${location.host}/ws`);
+        socket.onopen = () => setConnectionState(true);
+        socket.onmessage = (event) => {
+          try {
+            updateTelemetry(JSON.parse(event.data));
+            received++;
+          } catch (error) {
+            console.error("Mensaje WebSocket no válido:", error);
+          }
+        };
+        socket.onerror = (error) => console.error("Error WebSocket:", error);
+        socket.onclose = () => {
+          setConnectionState(false);
+          setTimeout(connect, 1000);
+        };
+      }
+
+      mountModeVButton.addEventListener("click", () =>
+        sendCommand("MOUNT_MODE_V"),
+      );
+      mountModeHButton.addEventListener("click", () =>
+        sendCommand("MOUNT_MODE_H"),
+      );
+
+      imuModeToggleButton.addEventListener("click", () =>
+        sendCommand("IMU_MODE_TOGGLE"),
+      );
+
+      qnhUpButton.addEventListener("click", () => sendCommand("QNH_UP"));
+      qnhDownButton.addEventListener("click", () => sendCommand("QNH_DOWN"));
+      pitchOffsetUpButton.addEventListener("click", () =>
+        sendCommand("PITCH_OFFSET_UP"),
+      );
+      pitchOffsetDownButton.addEventListener("click", () =>
+        sendCommand("PITCH_OFFSET_DOWN"),
+      );
+      /*
+       * Offset de rumbo:
+       *   - pulsación corta -> 1 grado
+       *   - pulsación mantenida -> repetición automática
+       *
+       * No se utiliza setPointerCapture(). En algunos navegadores/pantallas
+       * táctiles podía perderse el estado de la pulsación, especialmente en
+       * el botón de decremento.
+       *
+       * La repetición se hace con setTimeout encadenado en lugar de
+       * setInterval, evitando acumular comandos si el WebSocket o el ESP32
+       * tardan en procesarlos.
+       */
+      function enablePressAndHold(button, command) {
+        const HOLD_DELAY_MS = 350;
+        const REPEAT_PERIOD_MS = 100;
+
+        let holdTimer = null;
+        let repeatTimer = null;
+        let pressed = false;
+
+        const stop = () => {
+          pressed = false;
+
+          if (holdTimer !== null) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+          }
+
+          if (repeatTimer !== null) {
+            clearTimeout(repeatTimer);
+            repeatTimer = null;
+          }
+        };
+
+        const repeat = () => {
+          if (!pressed || button.disabled) {
+            stop();
+            return;
+          }
+
+          sendCommand(command);
+
+          repeatTimer = setTimeout(repeat, REPEAT_PERIOD_MS);
+        };
+
+        button.addEventListener("pointerdown", (event) => {
+          if (button.disabled) return;
+
+          event.preventDefault();
+          stop();
+
+          pressed = true;
+
+          /* Primer grado inmediatamente. */
+          sendCommand(command);
+
+          /*
+           * Si sigue pulsado después de HOLD_DELAY_MS comienza
+           * la repetición automática.
+           */
+          holdTimer = setTimeout(() => {
+            holdTimer = null;
+
+            if (pressed) {
+              repeat();
+            }
+          }, HOLD_DELAY_MS);
+        });
+
+        /*
+         * pointerup se escucha también en window para detener correctamente
+         * la repetición aunque el dedo/ratón termine fuera del botón.
+         */
+        window.addEventListener("pointerup", stop);
+        window.addEventListener("pointercancel", stop);
+        window.addEventListener("blur", stop);
+
+        button.addEventListener("contextmenu", (event) =>
+          event.preventDefault(),
+        );
+      }
+
+      enablePressAndHold(headingOffsetUpButton, "HEADING_OFFSET_UP");
+
+      enablePressAndHold(headingOffsetDownButton, "HEADING_OFFSET_DOWN");
+      recordButton.addEventListener("click", () => {
+        if (loggerRecording) {
+          sendCommand("RECORD_STOP");
+        } else {
+          /*
+           * RECORD_START trunca el fichero anterior. El ESP32 rechazará
+           * el inicio si BNO055 o fecha/hora GPS todavía no son válidos.
+           */
+          sendCommand("RECORD_START");
+        }
+      });
+
+      downloadButton.addEventListener("click", () => {
+        if (loggerRecording || !loggerFileAvailable) return;
+
+        /*
+         * Descarga HTTP directa. El servidor envía Content-Disposition
+         * attachment con nombre aceleracion.csv.
+         */
+        window.location.href = "/download_log";
+      });
+
+      gResetButton.addEventListener("click", () => sendCommand("G_RESET"));
+      setInterval(() => {
+        document.getElementById("messageRate").textContent =
+          `${received} mensajes/s`;
+        received = 0;
+      }, 1000);
+
+      createCompassRose();
+      drawGroundSpeedGauge(0, false);
+      updateGText(0, 0, 0);
+      setConnectionState(false);
+      requestAnimationFrame(animateAltimeter);
+      connect();
+    </script>
+  </body>
+</html>

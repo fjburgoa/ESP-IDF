@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "MPUTestDeepSeek2",
-    "project_version":    "b00191a1a-dirty",
+    "project_version":    "8332ceb97-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/I2CTESTSMISC",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.2/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/I2CTESTSMISC/build",
@@ -745,7 +745,7 @@
             "managed_reqs": [],
             "managed_priv_reqs": [ "espressif__led_strip", "tny-robotics__sh1106-esp-idf" ],
             "file": "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/I2CTESTSMISC/build/esp-idf/main/libmain.a",
-            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/I2CTESTSMISC/main/mainGPS_basic.c" ],
+            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/I2CTESTSMISC/main/procesado.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/I2CTESTSMISC/main/acond_y_medida.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/I2CTESTSMISC/main/mainMPU6050.c" ],
             "include_dirs": [ "." ]
         },
         "mbedtls": {
