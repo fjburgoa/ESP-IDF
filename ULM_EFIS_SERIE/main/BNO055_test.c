@@ -113,10 +113,10 @@ static void BNO055Task(void *pvParameters)
 
         boot_previous = boot_now;
 
-        bno055_vector3f_t acceleration_ms2 = {0};
-        bno055_vector3f_t gyro_dps = {0};
-        bno055_quaternionf_t quaternion = {0};
-        bno055_vector3f_t linear_acceleration_ms2 = {0};
+        // bno055_vector3f_t acceleration_ms2 = {0};
+        // bno055_vector3f_t gyro_dps = {0};
+        // bno055_quaternionf_t quaternion = {0};
+        // bno055_vector3f_t linear_acceleration_ms2 = {0};
         bno055_vector3f_t gravity_ms2 = {0};
 
         uint8_t calibration_system = 0U;
@@ -128,50 +128,50 @@ static void BNO055Task(void *pvParameters)
         esp_err_t err;
 
         /* 1. Acelerómetro */
-        err = bno055_driver_read_acceleration(&acceleration_ms2);
+        // err = bno055_driver_read_acceleration(&acceleration_ms2);
 
-        if (err != ESP_OK)
-        {
-            ESP_LOGW(TAG, "Error leyendo ACC: %s", esp_err_to_name(err));
-            sample_ok = false;
-        }
+        // if (err != ESP_OK)
+        // {
+        //     ESP_LOGW(TAG, "Error leyendo ACC: %s", esp_err_to_name(err));
+        //     sample_ok = false;
+        // }
 
         /* 2. Giróscopo */
-        if (sample_ok)
-        {
-            err = bno055_driver_read_gyro(&gyro_dps);
+        // if (sample_ok)
+        // {
+        //     err = bno055_driver_read_gyro(&gyro_dps);
 
-            if (err != ESP_OK)
-            {
-                ESP_LOGW(TAG, "Error leyendo GYR: %s", esp_err_to_name(err));
-                sample_ok = false;
-            }
-        }
+        //     if (err != ESP_OK)
+        //     {
+        //         ESP_LOGW(TAG, "Error leyendo GYR: %s", esp_err_to_name(err));
+        //         sample_ok = false;
+        //     }
+        // }
 
-        /* 3. Cuaternión */
-        if (sample_ok)
-        {
-            err = bno055_driver_read_quaternion(&quaternion);
+        // /* 3. Cuaternión */
+        // if (sample_ok)
+        // {
+        //     err = bno055_driver_read_quaternion(&quaternion);
 
-            if (err != ESP_OK)
-            {
-                ESP_LOGW(TAG, "Error leyendo QUAT: %s", esp_err_to_name(err));
-                sample_ok = false;
-            }
-        }
+        //     if (err != ESP_OK)
+        //     {
+        //         ESP_LOGW(TAG, "Error leyendo QUAT: %s", esp_err_to_name(err));
+        //         sample_ok = false;
+        //     }
+        // }
 
-        /* 4. Aceleración lineal */
-        if (sample_ok)
-        {
-            err = bno055_driver_read_linear_acceleration(
-                &linear_acceleration_ms2);
+        // /* 4. Aceleración lineal */
+        // if (sample_ok)
+        // {
+        //     err = bno055_driver_read_linear_acceleration(
+        //         &linear_acceleration_ms2);
 
-            if (err != ESP_OK)
-            {
-                ESP_LOGW(TAG, "Error leyendo LIN: %s", esp_err_to_name(err));
-                sample_ok = false;
-            }
-        }
+        //     if (err != ESP_OK)
+        //     {
+        //         ESP_LOGW(TAG, "Error leyendo LIN: %s", esp_err_to_name(err));
+        //         sample_ok = false;
+        //     }
+        // }
 
         /* 5. Vector gravedad */
         if (sample_ok)
@@ -199,36 +199,36 @@ static void BNO055Task(void *pvParameters)
         }
         */
 
-        /* 7. Calibración */
-        if (sample_ok)
-        {
-            err = bno055_driver_read_calibration(
-                &calibration_system,
-                &calibration_gyro,
-                &calibration_accel,
-                &calibration_mag);
+        // /* 7. Calibración */
+        // if (sample_ok)
+        // {
+        //     err = bno055_driver_read_calibration(
+        //         &calibration_system,
+        //         &calibration_gyro,
+        //         &calibration_accel,
+        //         &calibration_mag);
 
-            if (err != ESP_OK)
-            {
-                ESP_LOGW(TAG, "Error leyendo CAL: %s", esp_err_to_name(err));
-                sample_ok = false;
-            }
-        }
+        //     if (err != ESP_OK)
+        //     {
+        //         ESP_LOGW(TAG, "Error leyendo CAL: %s", esp_err_to_name(err));
+        //         sample_ok = false;
+        //     }
+        // }
 
         /* Publicar la última muestra completa para otros módulos. */
         if (sample_ok)
         {
             portENTER_CRITICAL(&s_data_mux);
 
-            s_data.acceleration_ms2 = acceleration_ms2;
-            s_data.gyro_dps = gyro_dps;
-            s_data.quaternion = quaternion;
-            s_data.linear_acceleration_ms2 = linear_acceleration_ms2;
+            // s_data.acceleration_ms2 = acceleration_ms2;
+            // s_data.gyro_dps = gyro_dps;
+            // s_data.quaternion = quaternion;
+            // s_data.linear_acceleration_ms2 = linear_acceleration_ms2;
             s_data.gravity_ms2 = gravity_ms2;
-            s_data.calibration_system = calibration_system;
-            s_data.calibration_gyro = calibration_gyro;
-            s_data.calibration_accel = calibration_accel;
-            s_data.calibration_mag = calibration_mag;
+            // s_data.calibration_system = calibration_system;
+            // s_data.calibration_gyro = calibration_gyro;
+            // s_data.calibration_accel = calibration_accel;
+            // s_data.calibration_mag = calibration_mag;
             s_data.valid = true;
 
             portEXIT_CRITICAL(&s_data_mux);
@@ -306,13 +306,13 @@ esp_err_t BNO055_start(void)
         (unsigned int)(1000U / BNO055_PERIOD_MS));
 
     const BaseType_t ok =
-        xTaskCreate(
+        xTaskCreatePinnedToCore(
             BNO055Task,
             "bno055_test",
             BNO055_TASK_STACK_SIZE,
             NULL,
             BNO055_TASK_PRIORITY,
-            &s_bno055_test_task);
+            &s_bno055_test_task, 1);
 
     if (ok != pdPASS)
     {

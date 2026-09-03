@@ -69,91 +69,86 @@ static esp_err_t bno055_read_sample(bno055_data_t *sample, bool read_slow_data)
 
     bno055_data_t data = {0};
 
-    /* ---------------------------------------------------------------------- */
-    /* Datos rápidos comunes                                                  */
-    /* ---------------------------------------------------------------------- */
-
-    ESP_RETURN_ON_ERROR(
-        bno055_driver_read_acceleration(&data.acceleration_ms2),
-        TAG,
-        "Error leyendo acceleration_ms2");
-
-    ESP_RETURN_ON_ERROR(
-        bno055_driver_read_gyro(&data.gyro_dps),
-        TAG,
-        "Error leyendo giroscopo");
-
-    /*
-     * El magnetómetro no se utiliza en el EFIS.
-     * Se fuerza explícitamente a cero y no se genera ninguna transacción I2C.
-     */
-    data.magnetic_field_ut = (bno055_vector3f_t){0};
-
-    /* ---------------------------------------------------------------------- */
-    /* Datos rápidos exclusivos de NDOF                                       */
-    /* ---------------------------------------------------------------------- */
-
-    if (s_operation_mode == BNO055_OPERATION_MODE_NDOF)
+    if xSemaphoreTake (xMutex, pdMS_TO_TICKS(2))
     {
+        /* ---------------------------------------------------------------------- */
+        /* Datos rápidos comunes                                                  */
+        /* ---------------------------------------------------------------------- */
+
+        ESP_RETURN_ON_ERROR(
+            bno055_driver_read_acceleration(&data.acceleration_ms2),
+            TAG,
+            "Error leyendo acceleration_ms2");
+
+        ESP_RETURN_ON_ERROR(
+            bno055_driver_read_gyro(&data.gyro_dps),
+            TAG,
+            "Error leyendo giroscopo");
+
         /*
-         * La actitud se obtiene del cuaternión. No se leen los registros Euler,
-         * eliminando una transacción I2C adicional por ciclo.
+         * El magnetómetro no se utiliza en el EFIS.
+         * Se fuerza explícitamente a cero y no se genera ninguna transacción I2C.
          */
-        /*
-                ESP_RETURN_ON_ERROR(
-                    bno055_driver_read_quaternion(&data.quaternion),
-                    TAG,
-                    "Error leyendo cuaternion");
+        // data.magnetic_field_ut = (bno055_vector3f_t){0};
 
-                ESP_RETURN_ON_ERROR(
-                    bno055_driver_read_linear_acceleration(
-                        &data.linear_acceleration_ms2),
-                    TAG,
-                    "Error leyendo aceleracion lineal");
-        */
-        ESP_RETURN_ON_ERROR(bno055_driver_read_gravity(&data.gravity_ms2), TAG, "Error leyendo gravedad");
+        /* ---------------------------------------------------------------------- */
+        /* Datos rápidos exclusivos de NDOF                                       */
+        /* ---------------------------------------------------------------------- */
+
+        // if (s_operation_mode == BNO055_OPERATION_MODE_NDOF)
+        // {
+        //     /*
+        //     * La actitud se obtiene del cuaternión. No se leen los registros Euler,
+        //     * eliminando una transacción I2C adicional por ciclo.
+        //     */
+        //     ESP_RETURN_ON_ERROR(bno055_driver_read_quaternion(&data.quaternion), TAG, "Error leyendo cuaternion");
+        //     ESP_RETURN_ON_ERROR(bno055_driver_read_linear_acceleration(&data.linear_acceleration_ms2),TAG, "Error leyendo aceleracion lineal");
+        //     ESP_RETURN_ON_ERROR(bno055_driver_read_gravity(&data.gravity_ms2), TAG, "Error leyendo gravedad");
+        // }
+        // else
+        // {
+        //     data.heading_deg = 0.0f;
+        //     data.roll_deg = 0.0f;
+        //     data.pitch_deg = 0.0f;
+
+        //     data.quaternion = (bno055_quaternionf_t){0};
+        //     data.linear_acceleration_ms2 = (bno055_vector3f_t){0};
+        //     data.gravity_ms2 = (bno055_vector3f_t){0};
+        // }
+
+        /* ---------------------------------------------------------------------- */
+        /* Datos lentos: aproximadamente 1 Hz                                      */
+        /* ---------------------------------------------------------------------- */
+
+        // if (read_slow_data)
+        // {
+        //     ESP_RETURN_ON_ERROR(
+        //         bno055_driver_read_temperature(&s_temperature_c),
+        //         TAG,
+        //         "Error leyendo temperatura");
+
+        //     ESP_RETURN_ON_ERROR(
+        //         bno055_driver_read_calibration(
+        //             &s_calibration_system,
+        //             &s_calibration_gyro,
+        //             &s_calibration_accel,
+        //             &s_calibration_mag),
+        //         TAG,
+        //         "Error leyendo calibracion");
+        // }
+
+        data.temperature_c = s_temperature_c;
+        data.calibration_system = s_calibration_system;
+        data.calibration_gyro = s_calibration_gyro;
+        data.calibration_accel = s_calibration_accel;
+        data.calibration_mag = s_calibration_mag;
+
+        *sample = data;
+
+        xSemaphoreGive(xMutex);
+
+        return ESP_OK;
     }
-    else
-    {
-        data.heading_deg = 0.0f;
-        data.roll_deg = 0.0f;
-        data.pitch_deg = 0.0f;
-
-        data.quaternion = (bno055_quaternionf_t){0};
-        data.linear_acceleration_ms2 = (bno055_vector3f_t){0};
-        data.gravity_ms2 = (bno055_vector3f_t){0};
-    }
-
-    /* ---------------------------------------------------------------------- */
-    /* Datos lentos: aproximadamente 1 Hz                                      */
-    /* ---------------------------------------------------------------------- */
-
-    if (read_slow_data)
-    {
-        ESP_RETURN_ON_ERROR(
-            bno055_driver_read_temperature(&s_temperature_c),
-            TAG,
-            "Error leyendo temperatura");
-
-        ESP_RETURN_ON_ERROR(
-            bno055_driver_read_calibration(
-                &s_calibration_system,
-                &s_calibration_gyro,
-                &s_calibration_accel,
-                &s_calibration_mag),
-            TAG,
-            "Error leyendo calibracion");
-    }
-
-    data.temperature_c = s_temperature_c;
-    data.calibration_system = s_calibration_system;
-    data.calibration_gyro = s_calibration_gyro;
-    data.calibration_accel = s_calibration_accel;
-    data.calibration_mag = s_calibration_mag;
-
-    *sample = data;
-
-    return ESP_OK;
 }
 
 /* -------------------------------------------------------------------------- */

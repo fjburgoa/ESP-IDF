@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "ULM_EFIS_SERIE",
-    "project_version":    "8332ceb97-dirty",
+    "project_version":    "760f6b960-dirty",
     "project_path":       "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE",
     "idf_path":           "C:/Users/fjbur/esp/v5.5.2/esp-idf",
     "build_dir":          "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/build",
@@ -850,7 +850,7 @@
             "managed_reqs": [],
             "managed_priv_reqs": [],
             "file": "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/build/esp-idf/main/libmain.a",
-            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/main.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/wifi_ap.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/webserver.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/websocket.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/BMP280.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/BNO055_driver.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/BNO055_test.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/GPS.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/DataLogger.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/MPU6050.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/build/index.html.S" ],
+            "sources": [ "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/main.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/wifi_ap.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/webserver.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/websocket.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/BMP280.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/BNO055_driver.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/BNO055_test.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/GPS.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/DataLogger.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/MPU6050.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/main/Hybrid_pitch_roll.c", "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS_SERIE/build/index.html.S" ],
             "include_dirs": [ "include" ]
         },
         "mbedtls": {

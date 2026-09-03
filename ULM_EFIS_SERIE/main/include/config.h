@@ -291,4 +291,6 @@
 #define NVS_KEY_MOUNT_MODE "mount_mode"
 #define NVS_KEY_IMU_MODE "imu_mode"
 
+extern SemaphoreHandle_t xMutex;
+
 #endif /* PROJECT_CONFIG_H */

@@ -12,6 +12,8 @@ idf_component_register(
         "GPS.c"
         "DataLogger.c"
         "MPU6050.c"
+        "Hybrid_pitch_roll.c"
+        #"Kalman_pitch_roll.c"
 
     INCLUDE_DIRS
         "include"

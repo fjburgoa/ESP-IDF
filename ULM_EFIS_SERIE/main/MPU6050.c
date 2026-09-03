@@ -3,11 +3,16 @@
 #include <stdio.h>
 
 #include "driver/i2c.h"
+
 #include "esp_check.h"
+#include "esp_err.h"
 #include "esp_log.h"
+
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+#include "config.h"
 
 #include "MPU6050.h"
 
@@ -26,7 +31,7 @@
  * Para actitud conviene trabajar bastante más rápido que los 80 ms iniciales.
  * 20 ms = 50 Hz. Puede bajarse posteriormente a 10 ms = 100 Hz.
  */
-#define MPU6050_PERIOD_MS 20U // esto habrá que pasarlo a config.h
+#define MPU6050_PERIOD_MS 40U // esto habrá que pasarlo a config.h
 
 #define MPU6050_ACCEL_RANGE_G 2U
 #define MPU6050_GYRO_RANGE_DPS 250U
@@ -46,10 +51,10 @@
  * proyección de gravedad estimada a partir de roll/pitch y se filtra antes
  * de convertirla a desplazamiento angular del instrumento.
  */
-#define SLIP_BALL_FILTER_TAU_S 0.25f
-#define SLIP_BALL_GAIN_DEG_PER_G 120.0f
-#define SLIP_BALL_LIMIT_DEG 25.0f
-#define SLIP_BALL_DEADBAND_G 0.015f
+// #define SLIP_BALL_FILTER_TAU_S 0.25f
+// #define SLIP_BALL_GAIN_DEG_PER_G 120.0f
+// #define SLIP_BALL_LIMIT_DEG 25.0f
+// #define SLIP_BALL_DEADBAND_G 0.015f
 
 static const char *TAG = "MPU6050";
 
@@ -57,10 +62,6 @@ static TaskHandle_t s_mpu_task = NULL;
 static portMUX_TYPE s_data_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static mpu6050_data_t s_data = {0};
-
-static float s_roll_deg = 0.0f;
-static float s_pitch_deg = 0.0f;
-static bool s_attitude_initialized = false;
 
 static float s_gyro_bias_x_raw = 0.0f;
 static float s_gyro_bias_y_raw = 0.0f;
@@ -71,7 +72,6 @@ static float s_acc_bias_y_raw = 0.0f;
 static float s_acc_bias_z_raw = 0.0f;
 
 /* Estado interno del filtro paso bajo de la bola. */
-static float s_slip_ball_filtered_g = 0.0f;
 
 /*----------------------------------------------------------------------------*/
 static esp_err_t mpu6050_register_write(uint8_t mpuid,
@@ -351,65 +351,6 @@ static esp_err_t mpu6050_calibrate_accel(void)
 }
 
 /*----------------------------------------------------------------------------*/
-void MPU6050_compute_roll_pitch(float ax_g,
-                                float ay_g,
-                                float az_g,
-                                float gx_dps,
-                                float gy_dps,
-                                float dt_s,
-                                float *roll_deg,
-                                float *pitch_deg)
-{
-    if ((roll_deg == NULL) || (pitch_deg == NULL))
-    {
-        return;
-    }
-
-    /*
-     * Ángulos calculados exclusivamente con la gravedad.
-     * Esta convención supone:
-     *   X: hacia delante
-     *   Y: hacia la derecha
-     *   Z: hacia arriba o abajo según el montaje.
-     *
-     * Si el módulo está montado con otra orientación habrá que permutar
-     * ejes o cambiar signos.
-     */
-    const float roll_acc_deg =
-        atan2f(ay_g, az_g) * RAD_TO_DEG;
-
-    const float pitch_acc_deg =
-        atan2f(-ax_g, sqrtf(ay_g * ay_g + az_g * az_g)) *
-        RAD_TO_DEG;
-
-    if (!s_attitude_initialized ||
-        !isfinite(s_roll_deg) ||
-        !isfinite(s_pitch_deg))
-    {
-        s_roll_deg = roll_acc_deg;
-        s_pitch_deg = pitch_acc_deg;
-        s_attitude_initialized = true;
-    }
-    else
-    {
-        if ((dt_s <= 0.0f) || (dt_s > 0.5f))
-        {
-            dt_s = (float)MPU6050_PERIOD_MS / 1000.0f;
-        }
-
-        const float roll_gyro_deg = s_roll_deg + gx_dps * dt_s;
-        const float pitch_gyro_deg = s_pitch_deg + gy_dps * dt_s;
-
-        s_roll_deg = COMPLEMENTARY_ALPHA * roll_gyro_deg + (1.0f - COMPLEMENTARY_ALPHA) * roll_acc_deg;
-
-        s_pitch_deg = COMPLEMENTARY_ALPHA * pitch_gyro_deg + (1.0f - COMPLEMENTARY_ALPHA) * pitch_acc_deg;
-    }
-
-    *roll_deg = s_roll_deg;
-    *pitch_deg = s_pitch_deg;
-}
-
-/*----------------------------------------------------------------------------*/
 mpu6050_data_t MPU6050_get_data(void)
 {
     // esta función la usa websocket.c
@@ -420,20 +361,6 @@ mpu6050_data_t MPU6050_get_data(void)
     portEXIT_CRITICAL(&s_data_mux);
 
     return snapshot;
-}
-
-/*----------------------------------------------------------------------------*/
-void MPU6050_reset_accel_peaks(void)
-{
-    portENTER_CRITICAL(&s_data_mux);
-
-    s_data.g_current = 0.0f;
-    s_data.g_max = 0.0f;
-    s_data.g_min = 0.0f;
-
-    portEXIT_CRITICAL(&s_data_mux);
-
-    ESP_LOGI(TAG, "G-meter reseteado: current=0, max=0, min=0");
 }
 
 /*----------------------------------------------------------------------------*/
@@ -517,7 +444,7 @@ esp_err_t MPU6050_start(void)
 
     ESP_RETURN_ON_ERROR(mpu6050_init(), TAG, "No se pudo inicializar MPU6050");
 
-    BaseType_t ok = xTaskCreate(MPU6050Task, "mpu6050", 4096, NULL, 5, &s_mpu_task);
+    BaseType_t ok = xTaskCreatePinnedToCore(MPU6050Task, "mpu6050", 4096, NULL, 5, &s_mpu_task, 1);
 
     if (ok != pdPASS)
     {
