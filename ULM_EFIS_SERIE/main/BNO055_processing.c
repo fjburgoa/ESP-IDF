@@ -49,7 +49,12 @@
 
 /* -------------------------------------------------------------------------- */
 
-static void bno055_compute_accel_attitude(float ax, float ay, float az, float *roll_deg, float *pitch_deg)
+static void bno055_compute_accel_attitude(
+    float ax,
+    float ay,
+    float az,
+    float *roll_deg,
+    float *pitch_deg)
 {
     const float az2 = az * az;
 
@@ -680,82 +685,6 @@ static float bno055_integrate_yaw_deg(
 }
 
 /* -------------------------------------------------------------------------- */
-/* CONVERSIÓN DE CUATERNIÓN A ÁNGULOS DE EULER                               */
-/* -------------------------------------------------------------------------- */
-
-/*
- * Convierte el cuaternión unitario proporcionado por la fusión interna del
- * BNO055 a heading, roll y pitch.
- *
- * Se utiliza en NDOF en lugar de leer los registros Euler del sensor. De esta
- * forma el horizonte utiliza directamente la representación de actitud
- * fundamental entregada por el algoritmo de fusión y se elimina una
- * transacción I2C por muestra.
- */
-static void bno055_quaternion_to_euler_deg(
-    const bno055_quaternionf_t *q,
-    float *heading_deg,
-    float *roll_deg,
-    float *pitch_deg)
-{
-    if ((q == NULL) || (heading_deg == NULL) || (roll_deg == NULL) || (pitch_deg == NULL))
-        return;
-
-    const float w = q->w;
-    const float x = q->x;
-    const float y = q->y;
-    const float z = q->z;
-
-    const float norm2 = w * w + x * x + y * y + z * z;
-
-    if (!isfinite(norm2) || (norm2 < 1.0e-8f))
-    {
-        *heading_deg = 0.0f;
-        *roll_deg = 0.0f;
-        *pitch_deg = 0.0f;
-        return;
-    }
-
-    /*
-     * Normalizamos defensivamente. El BNO055 entrega normalmente un cuaternión
-     * prácticamente unitario, pero esta normalización evita que pequeños
-     * errores numéricos afecten a asin().
-     */
-    const float inv_norm = 1.0f / sqrtf(norm2);
-
-    const float q0 = w * inv_norm;
-    const float q1 = x * inv_norm;
-    const float q2 = y * inv_norm;
-    const float q3 = z * inv_norm;
-
-    const float sinr_cosp = 2.0f * (q0 * q1 + q2 * q3);
-
-    const float cosr_cosp = 1.0f - 2.0f * (q1 * q1 + q2 * q2);
-
-    float sinp = 2.0f * (q0 * q2 - q3 * q1);
-
-    if (sinp > 1.0f)
-        sinp = 1.0f;
-    else if (sinp < -1.0f)
-        sinp = -1.0f;
-
-    const float siny_cosp = 2.0f * (q0 * q3 + q1 * q2);
-
-    const float cosy_cosp = 1.0f - 2.0f * (q2 * q2 + q3 * q3);
-
-    *roll_deg = atan2f(sinr_cosp, cosr_cosp) * RAD_TO_DEG;
-
-    *pitch_deg = asinf(sinp) * RAD_TO_DEG;
-
-    float heading = atan2f(siny_cosp, cosy_cosp) * RAD_TO_DEG;
-
-    if (heading < 0.0f)
-        heading += 360.0f;
-
-    *heading_deg = heading;
-}
-
-/* -------------------------------------------------------------------------- */
 /* API interna de procesamiento                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -769,7 +698,9 @@ void bno055_processing_reset(bno055_processing_state_t *state)
 
 /* -------------------------------------------------------------------------- */
 
-void bno055_processing_reset_g_peaks(bno055_processing_state_t *state, float g_current)
+void bno055_processing_reset_g_peaks(
+    bno055_processing_state_t *state,
+    float g_current)
 {
     if ((state == NULL) || !isfinite(g_current))
         return;
@@ -923,25 +854,10 @@ void bno055_process_sample_ndof(bno055_processing_state_t *state, bno055_data_t 
         return;
 
     /*
-     * En NDOF el cuaternión, gravity y linear_acceleration proceden de la
-     * fusión interna del BNO055.
-     *
-     * La actitud Euler utilizada por el EFIS se obtiene localmente a partir
-     * del cuaternión; no se leen los registros Euler del sensor.
+     * En NDOF, roll/pitch/heading, gravity y linear_acceleration ya han sido
+     * calculados por la fusión interna del BNO055 durante la fase de lectura.
+     * Esta función no vuelve a estimar la actitud.
      */
-    /*
-        bno055_quaternion_to_euler_deg(
-            &data->quaternion,
-            &data->heading_deg,
-            &data->roll_deg,
-            &data->pitch_deg);
-    */
-
-    float gx = data->gravity_ms2.x;
-    float gy = data->gravity_ms2.y;
-    float gz = data->gravity_ms2.z;
-
-    bno055_compute_accel_attitude(gx, gy, gz, &data->roll_deg, &data->pitch_deg);
 
     /* ---------------------------------------------------------------------- */
     /* Aceleración                                                            */

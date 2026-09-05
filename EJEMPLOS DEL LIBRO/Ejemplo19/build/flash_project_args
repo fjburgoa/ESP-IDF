@@ -1,5 +1,5 @@
---flash_mode dio --flash_freq 80m --flash_size 2MB
+--flash-mode dio --flash-freq 80m --flash-size 2MB
 0x0 bootloader/bootloader.bin
-0x10000 Ejemplo19.bin
 0x8000 partition_table/partition-table.bin
 0x9000 nvs.bin
+0x10000 Ejemplo19.bin

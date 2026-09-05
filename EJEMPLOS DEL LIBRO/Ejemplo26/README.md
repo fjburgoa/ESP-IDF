@@ -1,8 +1,8 @@
 Ejemplo 26 del Libro - Comunicación a través de UDP
 
-
 CREADO POR FRANCISCO JAVIER BURGOA el 15/12/2025, Version API: 5.5.1
 Actualizado a API: 5.5.2 el 27/12/2025
+Actualizado a API: 6.1.0 el 05/09/2026
 
 1 En menuconfig, actualiza SSID y PASSWORD
 2 Abrir el directorio en VSCode > Open Folder
@@ -13,8 +13,6 @@ Actualizado a API: 5.5.2 el 27/12/2025
 7 Instalar de Microsoft Store > UDP - Sender/Receiver de ReddySoftware u otro programa equivalente
 8 Toma nota de la dirección IP de tu dispositivo.
 9 Indica la dirección remota en el cliente UDP y el puerto (3333)
-
-
 
 ---- Opened the serial port COM4 ----
 ESP-ROM:esp32s3-20210327
@@ -32,35 +30,35 @@ I (25) boot: Multicore bootloader
 I (25) boot: chip revision: v0.2
 I (28) boot: efuse block revision: v1.3
 I (32) boot.esp32s3: Boot SPI Speed : 80MHz
-I (36) boot.esp32s3: SPI Mode       : DIO
+I (36) boot.esp32s3: SPI Mode : DIO
 I (39) boot.esp32s3: SPI Flash Size : 2MB
 I (43) boot: Enabling RNG early entropy source...
 I (48) boot: Partition Table:
-I (50) boot: ## Label            Usage          Type ST Offset   Length
-I (57) boot:  0 nvs              WiFi data        01 02 00009000 00006000
-I (63) boot:  1 phy_init         RF data          01 01 0000f000 00001000
-I (70) boot:  2 factory          factory app      00 00 00010000 00100000
+I (50) boot: ## Label Usage Type ST Offset Length
+I (57) boot: 0 nvs WiFi data 01 02 00009000 00006000
+I (63) boot: 1 phy_init RF data 01 01 0000f000 00001000
+I (70) boot: 2 factory factory app 00 00 00010000 00100000
 I (76) boot: End of partition table
 I (79) esp_image: segment 0: paddr=00010020 vaddr=3c090020 size=19eb8h (106168) map
 I (106) esp_image: segment 1: paddr=00029ee0 vaddr=3fc9a700 size=04a24h ( 18980) load
-I (110) esp_image: segment 2: paddr=0002e90c vaddr=40374000 size=0170ch (  5900) load
+I (110) esp_image: segment 2: paddr=0002e90c vaddr=40374000 size=0170ch ( 5900) load
 I (111) esp_image: segment 3: paddr=00030020 vaddr=42000020 size=87220h (553504) map
 I (214) esp_image: segment 4: paddr=000b7248 vaddr=4037570c size=14f54h ( 85844) load
-I (233) esp_image: segment 5: paddr=000cc1a4 vaddr=50000000 size=00020h (    32) load
+I (233) esp_image: segment 5: paddr=000cc1a4 vaddr=50000000 size=00020h ( 32) load
 I (243) boot: Loaded app from partition at offset 0x10000
 I (243) boot: Disabling RNG early entropy source...
 I (253) cpu_start: Multicore app
 I (262) cpu_start: Pro cpu start user code
 I (262) cpu_start: cpu freq: 160000000 Hz
 I (262) app_init: Application information:
-I (262) app_init: Project name:     Ejemplo26
-I (266) app_init: App version:      86cd50bd-dirty
-I (271) app_init: Compile time:     Dec 16 2025 18:46:14
-I (276) app_init: ELF file SHA256:  bc0cdfe0e...
-I (280) app_init: ESP-IDF:          v5.5.1-dirty
-I (284) efuse_init: Min chip rev:     v0.0
-I (288) efuse_init: Max chip rev:     v0.99 
-I (292) efuse_init: Chip rev:         v0.2
+I (262) app_init: Project name: Ejemplo26
+I (266) app_init: App version: 86cd50bd-dirty
+I (271) app_init: Compile time: Dec 16 2025 18:46:14
+I (276) app_init: ELF file SHA256: bc0cdfe0e...
+I (280) app_init: ESP-IDF: v5.5.1-dirty
+I (284) efuse_init: Min chip rev: v0.0
+I (288) efuse_init: Max chip rev: v0.99
+I (292) efuse_init: Chip rev: v0.2
 I (296) heap_init: Initializing. RAM available for dynamic allocation:
 I (302) heap_init: At 3FCA2E08 len 00046908 (282 KiB): RAM
 I (307) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
@@ -99,9 +97,9 @@ I (455) wifi_init: tcp rx win: 5760
 I (465) wifi_init: tcp mss: 1440
 I (465) wifi_init: WiFi IRAM OP enabled
 I (465) wifi_init: WiFi RX IRAM OP enabled
-I (475) phy_init: phy_version 701,f4f1da3a,Mar  3 2025,15:50:10
+I (475) phy_init: phy_version 701,f4f1da3a,Mar 3 2025,15:50:10
 I (515) phy_init: Saving new calibration data due to checksum failure or outdated calibration data, mode(0)
-I (535) wifi:mode : sta 
+I (535) wifi:mode : sta
 I (535) wifi:enable tsf
 I (535) example_connect: Connecting to XXXXXXXXXXXXXXXXXXXX...
 W (535) wifi:Password length matches WPA2 standards, authmode threshold changes from OPEN to WPA2
@@ -127,6 +125,4 @@ I (6195) example_common: - IPv6 address: fe80:0000:0000:0000:66e8:33ff:fe57:b558
 Socket creado
 sendto falló: errno=12
 
-
-RX desde 192.168.0.15: envió desde el cliente UDP  <- enviado desde el cliente
-
+RX desde 192.168.0.15: envió desde el cliente UDP <- enviado desde el cliente

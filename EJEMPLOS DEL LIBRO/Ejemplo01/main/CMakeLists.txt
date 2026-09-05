@@ -3,5 +3,5 @@ idf_component_register(SRCS "Ejemplo1.c"
                             #"Ejemplo3.c"
                             #"Ejemplo4.c"
 
-                      # PRIV_REQUIRES driver
+                       PRIV_REQUIRES esp_driver_gpio
                        INCLUDE_DIRS "")

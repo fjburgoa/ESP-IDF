@@ -1,9 +1,8 @@
 Ejemplo 25 del Libro - Servidor web
 
-
 CREADO POR FRANCISCO JAVIER BURGOA el 15/12/2025, Version API: 5.5.1
 Actualizado a API: 5.5.2 el 27/12/2025
-
+Actualizado a API: 6.1.0 el 05/09/2026
 
 1 En menuconfig, actualiza SSID y PASSWORD
 2 Abrir el directorio en VSCode > Open Folder

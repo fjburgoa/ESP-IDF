@@ -88,7 +88,7 @@ typedef struct
      */
     bno055_vector3f_t gravity_ms2;
 
-    /* Campo magnético [µT]. No utilizado: se publica siempre como {0,0,0}. */
+    /* Campo magnético [µT]. */
     bno055_vector3f_t magnetic_field_ut;
 
     /* Velocidad angular del cuerpo [deg/s]. */
@@ -101,7 +101,7 @@ typedef struct
      *   roll_deg    -> alabeo.
      *   pitch_deg   -> cabeceo.
      *
-     * En NDOF se calculan a partir del cuaternión de la fusión interna.
+     * En NDOF proceden de la fusión interna del BNO055.
      * En AMG pitch/roll se estiman en BNO055_processing.c.
      * En AMG heading_deg puede contener el yaw integrado de demostración.
      */

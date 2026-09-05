@@ -16,5 +16,6 @@
     "--query-driver=C:\\Users\\fjbur\\esp\\tools\\tools\\xtensa-esp-elf\\esp-14.2.0_20241119\\xtensa-esp-elf\\bin\\xtensa-esp32s3-elf-gcc.exe",
     "--compile-commands-dir=c:\\Users\\fjbur\\OneDrive\\Documentos\\ESP_programs\\NEB_STF_SPIFFS\\build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.currentSetup": "C:\\esp\\v6.1\\esp-idf"
 }

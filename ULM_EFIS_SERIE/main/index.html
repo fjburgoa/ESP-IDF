@@ -2972,10 +2972,11 @@
           (targetAltitudeFeet - displayedAltitudeFeet) * alpha;
         displayedVerticalSpeedFpm +=
           (targetVerticalSpeedFpm - displayedVerticalSpeedFpm) * alpha;
-        /* Horizonte artificial sin filtrado adicional en el navegador.
-         * Pitch y roll se aplican directamente tal como llegan del ESP32. */
-        displayedHorizonPitch = targetHorizonPitch;
-        displayedHorizonRoll = targetHorizonRoll;
+        displayedHorizonPitch +=
+          (targetHorizonPitch - displayedHorizonPitch) * alpha;
+        displayedHorizonRoll +=
+          shortestAngleDifference(targetHorizonRoll, displayedHorizonRoll) *
+          alpha;
         displayedHeadingDeg = normalizeHeading(
           displayedHeadingDeg +
             shortestAngleDifference(targetHeadingDeg, displayedHeadingDeg) *

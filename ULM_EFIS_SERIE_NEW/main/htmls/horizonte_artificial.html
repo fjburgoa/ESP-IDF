@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Horizonte artificial</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0d;
+      --panel: #171a1f;
+      --panel2: #20242a;
+      --border: rgba(255,255,255,.11);
+      --text: #f4f6f8;
+      --muted: #aeb5bf;
+      --blue: #238bff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      display: grid;
+      place-items: center;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 50% 15%, #20252e 0%, #0d1014 48%, #050608 100%);
+    }
+
+    .app {
+      width: min(1260px, 100%);
+      display: grid;
+      grid-template-columns: minmax(440px, 1.35fr) minmax(300px, .65fr);
+      gap: 28px;
+      align-items: center;
+    }
+
+    .instrument-card,
+    .controls {
+      background: linear-gradient(180deg, rgba(26,29,34,.98), rgba(11,13,16,.98));
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      box-shadow:
+        0 22px 55px rgba(0,0,0,.48),
+        inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .instrument-card {
+      padding: 16px;
+    }
+
+    .canvas-wrap {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 50%;
+    }
+
+    .controls {
+      padding: 25px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      margin: 0 0 28px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .control {
+      margin-bottom: 31px;
+    }
+
+    .control-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 13px;
+    }
+
+    label {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+
+    output {
+      min-width: 88px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 22px;
+      font-variant-numeric: tabular-nums;
+      color: #48a2ff;
+      background: #0e1115;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+      accent-color: var(--blue);
+    }
+
+    .limits {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 13px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, #343941, #252930);
+      color: white;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: linear-gradient(180deg, #3d434c, #2c3138);
+    }
+
+    .note {
+      margin: 20px 0 0;
+      padding: 14px 16px;
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      background: rgba(0,0,0,.20);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    @media (max-width: 870px) {
+      .app {
+        grid-template-columns: 1fr;
+        max-width: 720px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <section class="instrument-card">
+      <div class="canvas-wrap">
+        <canvas id="horizon" width="1000" height="1000"
+                aria-label="Horizonte artificial interactivo"></canvas>
+      </div>
+    </section>
+
+    <aside class="controls">
+      <h1>Horizonte artificial</h1>
+      <p class="subtitle">
+        Control interactivo de cabeceo y alabeo mediante dos deslizadores.
+      </p>
+
+      <div class="control">
+        <div class="control-head">
+          <label for="pitch">PITCH</label>
+          <output id="pitchOut" for="pitch">0°</output>
+        </div>
+        <input id="pitch" type="range" min="-90" max="90" value="0" step="1">
+        <div class="limits">
+          <span>−90°</span>
+          <span>+90°</span>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-head">
+          <label for="roll">ROLL</label>
+          <output id="rollOut" for="roll">0°</output>
+        </div>
+        <input id="roll" type="range" min="-180" max="180" value="0" step="1">
+        <div class="limits">
+          <span>−180°</span>
+          <span>+180°</span>
+        </div>
+      </div>
+
+      <button id="centerBtn" type="button">CENTRAR</button>
+
+      <p class="note">
+        Pitch positivo: morro arriba. Roll positivo: ala derecha abajo.
+        La esfera y las líneas de perspectiva se mueven conjuntamente,
+        mientras que el símbolo amarillo del avión permanece fijo.
+      </p>
+    </aside>
+  </main>
+
+  <script>
+    "use strict";
+
+    const canvas = document.getElementById("horizon");
+    const ctx = canvas.getContext("2d");
+
+    const pitchSlider = document.getElementById("pitch");
+    const rollSlider = document.getElementById("roll");
+    const pitchOut = document.getElementById("pitchOut");
+    const rollOut = document.getElementById("rollOut");
+    const centerBtn = document.getElementById("centerBtn");
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+
+    const screenRadius = 365;
+    const bezelOuter = 465;
+    const bezelInner = 407;
+    const pixelsPerDegree = 8.2;
+
+    let targetPitch = 0;
+    let targetRoll = 0;
+    let displayPitch = 0;
+    let displayRoll = 0;
+
+    function degToRad(deg) {
+      return deg * Math.PI / 180;
+    }
+
+    function formatAngle(value) {
+      const n = Math.round(value);
+      return `${n > 0 ? "+" : ""}${n}°`;
+    }
+
+    function shortestAngleDifference(target, current) {
+      return ((target - current + 540) % 360) - 180;
+    }
+
+    function drawBezel() {
+      ctx.save();
+
+      const g = ctx.createRadialGradient(
+        cx - 90, cy - 130, 70,
+        cx, cy, bezelOuter
+      );
+      g.addColorStop(0, "#3b3f46");
+      g.addColorStop(.46, "#1c1f24");
+      g.addColorStop(1, "#07080a");
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, bezelOuter, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = "#4c5057";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, bezelInner, 0, Math.PI * 2);
+      ctx.fillStyle = "#050608";
+      ctx.fill();
+
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "#101318";
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawPitchLadder() {
+      ctx.save();
+
+      ctx.strokeStyle = "#fff";
+      ctx.fillStyle = "#fff";
+      ctx.lineWidth = 7;
+      ctx.lineCap = "round";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "bold 34px Arial";
+
+      for (let angle = -80; angle <= 80; angle += 5) {
+        if (angle === 0) continue;
+
+        const y = -angle * pixelsPerDegree;
+        const absAngle = Math.abs(angle);
+        const major = absAngle % 10 === 0;
+        const halfWidth = major ? 92 : 38;
+
+        ctx.beginPath();
+        ctx.moveTo(-halfWidth, y);
+        ctx.lineTo(halfWidth, y);
+        ctx.stroke();
+
+        if (major && absAngle <= 50) {
+          ctx.fillText(String(absAngle), -132, y);
+          ctx.fillText(String(absAngle), 132, y);
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawGroundPerspective() {
+      ctx.save();
+
+      ctx.strokeStyle = "rgba(255,255,255,.92)";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+
+      /*
+       * Las líneas parten del centro del horizonte y se abren
+       * hasta la circunferencia inferior del instrumento.
+       */
+      const endAngles = [28, 47, 66, 114, 133, 152];
+
+      for (const a of endAngles) {
+        const rad = degToRad(a);
+        const x = Math.cos(rad) * screenRadius;
+        const y = Math.sin(rad) * screenRadius;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawMovingSphere(pitch, roll) {
+      ctx.save();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, screenRadius, 0, Math.PI * 2);
+      ctx.clip();
+
+      ctx.translate(cx, cy);
+      ctx.rotate(degToRad(-roll));
+      ctx.translate(0, pitch * pixelsPerDegree);
+
+      const ext = 1900;
+
+      const sky = ctx.createLinearGradient(0, -950, 0, 0);
+      sky.addColorStop(0, "#0062ad");
+      sky.addColorStop(.55, "#218fd3");
+      sky.addColorStop(1, "#66c6ef");
+      ctx.fillStyle = sky;
+      ctx.fillRect(-ext, -ext, ext * 2, ext);
+
+      const earth = ctx.createLinearGradient(0, 0, 0, 1000);
+      earth.addColorStop(0, "#875635");
+      earth.addColorStop(1, "#2c190f");
+      ctx.fillStyle = earth;
+      ctx.fillRect(-ext, 0, ext * 2, ext);
+
+      // Horizonte
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(-ext, -7, ext * 2, 14);
+
+      // Perspectiva en la zona marrón
+      drawGroundPerspective();
+
+      // Escala de pitch
+      drawPitchLadder();
+
+      ctx.restore();
+
+      // Reflejo del cristal
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, screenRadius, 0, Math.PI * 2);
+      ctx.clip();
+
+      const glass = ctx.createRadialGradient(
+        cx - 95, cy - 125, 20,
+        cx, cy, screenRadius
+      );
+      glass.addColorStop(0, "rgba(255,255,255,.12)");
+      glass.addColorStop(.58, "rgba(255,255,255,.025)");
+      glass.addColorStop(1, "rgba(0,0,0,.18)");
+
+      ctx.fillStyle = glass;
+      ctx.fillRect(
+        cx - screenRadius,
+        cy - screenRadius,
+        screenRadius * 2,
+        screenRadius * 2
+      );
+
+      ctx.restore();
+    }
+
+    function drawBankScale() {
+      ctx.save();
+
+      // Índice superior amarillo
+      ctx.fillStyle = "#ffe400";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - screenRadius + 13);
+      ctx.lineTo(cx - 18, cy - screenRadius + 55);
+      ctx.lineTo(cx + 18, cy - screenRadius + 55);
+      ctx.closePath();
+      ctx.fill();
+
+      // Marcas blancas, sin puntos ni números
+      const marks = [
+        { angle: -90, length: 53, width: 9 },
+        { angle: -60, length: 45, width: 8 },
+        { angle: -45, length: 38, width: 8 },
+        { angle: -30, length: 50, width: 9 },
+        { angle: -20, length: 42, width: 8 },
+        { angle: -10, length: 42, width: 8 },
+        { angle:  10, length: 42, width: 8 },
+        { angle:  20, length: 42, width: 8 },
+        { angle:  30, length: 50, width: 9 },
+        { angle:  45, length: 38, width: 8 },
+        { angle:  60, length: 45, width: 8 },
+        { angle:  90, length: 53, width: 9 }
+      ];
+
+      ctx.strokeStyle = "#fff";
+      ctx.lineCap = "butt";
+
+      for (const mark of marks) {
+        const a = degToRad(mark.angle - 90);
+        const r1 = screenRadius - 3;
+        const r2 = r1 - mark.length;
+
+        ctx.lineWidth = mark.width;
+        ctx.beginPath();
+        ctx.moveTo(
+          cx + Math.cos(a) * r1,
+          cy + Math.sin(a) * r1
+        );
+        ctx.lineTo(
+          cx + Math.cos(a) * r2,
+          cy + Math.sin(a) * r2
+        );
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawAircraftSymbol() {
+      ctx.save();
+
+      ctx.strokeStyle = "#ffe500";
+      ctx.fillStyle = "#ffe500";
+      ctx.lineWidth = 16;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 210, cy);
+      ctx.lineTo(cx - 65, cy);
+      ctx.quadraticCurveTo(cx - 55, cy + 45, cx, cy + 45);
+      ctx.quadraticCurveTo(cx + 55, cy + 45, cx + 65, cy);
+      ctx.lineTo(cx + 210, cy);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawLowerMask() {
+      ctx.save();
+
+      const g = ctx.createLinearGradient(0, cy + 250, 0, cy + 490);
+      g.addColorStop(0, "#22262b");
+      g.addColorStop(1, "#0b0d10");
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 315, cy + 292);
+      ctx.lineTo(cx + 315, cy + 292);
+      ctx.quadraticCurveTo(cx + 365, cy + 300, cx + 395, cy + 340);
+      ctx.lineTo(cx + 410, cy + 430);
+      ctx.lineTo(cx - 410, cy + 430);
+      ctx.lineTo(cx - 395, cy + 340);
+      ctx.quadraticCurveTo(cx - 365, cy + 300, cx - 315, cy + 292);
+      ctx.closePath();
+
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawKnob() {
+      const y = cy + 395;
+
+      const g = ctx.createRadialGradient(
+        cx - 12, y - 14, 8,
+        cx, y, 55
+      );
+      g.addColorStop(0, "#383c42");
+      g.addColorStop(1, "#111317");
+
+      ctx.beginPath();
+      ctx.arc(cx, y, 55, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = "#050607";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, y, 39, 0, Math.PI * 2);
+      ctx.fillStyle = "#202328";
+      ctx.fill();
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#3e434a";
+      ctx.stroke();
+    }
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, W, H);
+      drawBezel();
+      drawMovingSphere(displayPitch, displayRoll);
+      drawBankScale();
+      drawAircraftSymbol();
+      drawLowerMask();
+      drawKnob();
+    }
+
+    function updateTargets() {
+      targetPitch = Number(pitchSlider.value);
+      targetRoll = Number(rollSlider.value);
+
+      pitchOut.value = formatAngle(targetPitch);
+      rollOut.value = formatAngle(targetRoll);
+    }
+
+    function animate() {
+      displayPitch += (targetPitch - displayPitch) * 0.16;
+      displayRoll += shortestAngleDifference(targetRoll, displayRoll) * 0.16;
+
+      if (Math.abs(targetPitch - displayPitch) < 0.001) {
+        displayPitch = targetPitch;
+      }
+
+      if (Math.abs(shortestAngleDifference(targetRoll, displayRoll)) < 0.001) {
+        displayRoll = targetRoll;
+      }
+
+      drawFrame();
+      requestAnimationFrame(animate);
+    }
+
+    pitchSlider.addEventListener("input", updateTargets);
+    rollSlider.addEventListener("input", updateTargets);
+
+    centerBtn.addEventListener("click", () => {
+      pitchSlider.value = "0";
+      rollSlider.value = "0";
+      updateTargets();
+    });
+
+    canvas.addEventListener("dblclick", () => {
+      pitchSlider.value = "0";
+      rollSlider.value = "0";
+      updateTargets();
+    });
+
+    updateTargets();
+    animate();
+  </script>
+</body>
+</html>

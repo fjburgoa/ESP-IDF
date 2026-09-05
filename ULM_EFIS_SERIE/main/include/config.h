@@ -44,15 +44,14 @@
 
 /*
  * Modo IMU por defecto si NVS no contiene una seleccion previa:
- *   0 = BRUTO
- *   1 = PROCESADO
+ *   0 = AMG
+ *   1 = NDOF
  *
  * Despues del arranque puede cambiarse desde la interfaz web.
  */
 #define BNO055_DEFAULT_OPERATION_MODE 1U
 
 #define BNO055_PERIOD_MS 40U /* 25 Hz */
-// #define BNO055_PERIOD_MS 20U /* 50 Hz */
 #define BNO055_TASK_STACK_SIZE 5120U
 #define BNO055_TASK_PRIORITY 5U
 
@@ -79,12 +78,6 @@
 #define BNO055_POWER_MODE_DELAY_MS 10U
 #define BNO055_POST_INIT_DELAY_MS 500U
 #define BNO055_MOUNT_CHANGE_SETTLE_MS 150U
-
-#define BNOTESTMODE 1
-
-/* Botón BOOT usado por BNO055_test.c para recorrer los modos de operación. */
-#define BNO055_TEST_BOOT_GPIO GPIO_NUM_0
-#define BNO055_TEST_BOOT_DEBOUNCE_MS 150U
 
 /* ============================================================================
  * BNO055 - configuracion del acelerometro y giroscopo en AMG
@@ -177,7 +170,6 @@
  * 1: el receptor arranca ya a 115200 baud.
  * 0: se intenta arrancar a 9600 y despues cambiar a 115200.
  */
-
 #define GPS_115200 1
 
 #if GPS_115200
@@ -290,7 +282,5 @@
 #define NVS_KEY_HEAD_OFFSET "head_off"
 #define NVS_KEY_MOUNT_MODE "mount_mode"
 #define NVS_KEY_IMU_MODE "imu_mode"
-
-extern SemaphoreHandle_t xMutex;
 
 #endif /* PROJECT_CONFIG_H */
