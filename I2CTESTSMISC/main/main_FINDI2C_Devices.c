@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
 
 /* -------------------------------------------------------------------------- */
 /* I2C                                                                        */
@@ -87,6 +88,18 @@ static esp_err_t i2c_probe(uint8_t address)
 
 void app_main(void)
 {
+#define LED4 4
+#define LOW 0
+#define HIGH 1
+
+    // configura GPIO4 como salida digital
+    gpio_set_direction(LED4, GPIO_MODE_OUTPUT);
+    gpio_set_pull_mode(LED4, GPIO_PULLDOWN_ONLY);
+    gpio_set_level(LED4, LOW);
+
+    gpio_set_level(LED4, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
     ESP_LOGI(TAG, "Inicializando bus I2C...");
 
     ESP_ERROR_CHECK(i2c_master_init());

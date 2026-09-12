@@ -5,13 +5,16 @@ idf_component_register(SRCS     #"procesado.c" "acond_y_medida.c" "mainMPU6050.c
                                 #"mainMisc.c" "SH1106.c" "HCM588L3L.c"         #pantalla + Magnetometro
                                 #"mainDraft.c"                                 #pantalla intentando una brújula + Magnetometro
                                 #"mainGY_BM280.c"                              #barómetro
+                                #"mainGY_BM280_DEPRECATED.c"
                                 #"CPUAvion.c" "SH1106.c" "BM280.c" "HCM588L3L.c" "MPU6050.c"
                                 #"mainBNO055_Simple.c"
                                 #"mainBNO055_EFIS.c"
                                 #"mainGPS.c"
-                                "mainGPS_basic.c"
+                                #"mainGPS_basic.c"
                                 #"main_GPS_FAST.c"
                                 #"main_FINDI2C_Devices.c"
+                                "mainBNO086_Simple.c"
+                                #"mainBNO086_EFIS.c"
                                 
                                
                             REQUIRES esp_driver_gpio esp_driver_uart

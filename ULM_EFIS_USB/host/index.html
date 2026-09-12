@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EFIS USB · ESP32-S3</title>
+  <link rel="stylesheet" href="styles.css?v=8">
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="eyebrow">ESP32-S3 · WebHID</p><h1>EFIS USB</h1></div>
+      <div class="actions">
+        <span id="status" class="status"><i></i><span>Desconectado</span></span>
+        <button id="connect">Conectar USB</button>
+        <button id="orientationToggle" class="orientation-button" disabled>
+          Orientación: vertical
+        </button>
+        <button id="startRecording" class="record-button" disabled>
+          Iniciar registro
+        </button>
+        <button id="stopRecording" disabled>Detener y descargar</button>
+        <button id="disconnect" disabled>Desconectar</button>
+      </div>
+    </header>
+
+    <p id="message" class="message"></p>
+    <div class="record-status" aria-live="polite">
+      <i id="recordDot"></i>
+      <span id="recordStatus">Registro detenido · 0 pares</span>
+    </div>
+
+    <section class="instrument-group">
+      <div class="instrument-group-title"><h2>Instrumentos MPU6050</h2><span>Datos calculados por el MPU6050</span></div>
+      <div class="instruments">
+      <article class="instrument-card">
+        <div class="readout left"><small>Pitch</small><strong id="mpuPitchValue">0.00°</strong></div>
+        <div class="readout right"><small>Roll</small><strong id="mpuRollValue">0.00°</strong></div>
+        <canvas id="mpuHorizon" width="1000" height="1000" aria-label="Horizonte artificial MPU6050"></canvas>
+        <div class="offset-control">
+          <button id="offsetDown" disabled>−</button>
+          <span>Ajuste pitch <strong id="offsetValue">0°</strong></span>
+          <button id="offsetUp" disabled>+</button>
+        </div>
+      </article>
+
+      <article class="instrument-card">
+        <div class="readout left"><small>Giro</small><strong id="mpuTurnValue">0.00°/s</strong></div>
+        <div class="readout right"><small>Bola</small><strong id="mpuBallValue">0.0°</strong></div>
+        <svg viewBox="0 0 800 800" aria-label="Coordinador de giro MPU6050 con bola">
+          <defs>
+            <radialGradient id="mpuBezel" cx="40%" cy="32%"><stop stop-color="#777"/><stop offset=".48" stop-color="#34373a"/><stop offset="1" stop-color="#050607"/></radialGradient>
+            <radialGradient id="mpuFace"><stop stop-color="#30343a"/><stop offset=".65" stop-color="#171b1f"/><stop offset="1" stop-color="#080a0c"/></radialGradient>
+            <linearGradient id="mpuTube" x2="0" y2="1"><stop stop-color="#efedbd"/><stop offset=".55" stop-color="#85886d"/><stop offset="1" stop-color="#d7d6aa"/></linearGradient>
+            <radialGradient id="mpuBallPaint" cx="34%" cy="26%"><stop stop-color="#ccc"/><stop offset=".25" stop-color="#555"/><stop offset="1"/></radialGradient>
+            <clipPath id="mpuTubeClip"><path d="M250 548 Q400 580 550 548 L538 603 Q400 630 262 603Z"/></clipPath>
+          </defs>
+          <circle cx="400" cy="400" r="386" fill="#080808"/>
+          <circle cx="400" cy="400" r="375" fill="url(#mpuBezel)" stroke="#aaa" stroke-width="8"/>
+          <circle cx="400" cy="400" r="339" fill="url(#mpuFace)" stroke="#252a30" stroke-width="20"/>
+          <g fill="#fff"><rect x="127" y="391" width="49" height="19" rx="4"/><rect x="624" y="391" width="49" height="19" rx="4"/><rect x="155" y="493" width="48" height="18" rx="3" transform="rotate(-18 179 502)"/><rect x="597" y="493" width="48" height="18" rx="3" transform="rotate(18 621 502)"/></g>
+          <g id="mpuAircraft" fill="#fafafa">
+            <path d="M170 394 L350 387 L374 379 L385 328 Q388 318 400 318 Q412 318 415 328 L426 379 L450 387 L630 394 Q638 394 638 401 Q638 408 630 409 L449 416 L425 423 L414 435 Q408 441 400 441 Q392 441 386 435 L375 423 L351 416 L170 409 Q162 408 162 401 Q162 394 170 394Z"/>
+          </g>
+          <text x="400" y="520" fill="#fff" text-anchor="middle" font-size="25" font-family="Arial">TURN COORDINATOR</text>
+          <path d="M250 548 Q400 580 550 548 L538 603 Q400 630 262 603Z" fill="url(#mpuTube)" stroke="#d2d2aa" stroke-width="3"/>
+          <g stroke="#333" stroke-width="7"><line x1="350" y1="567" x2="354" y2="618"/><line x1="450" y1="567" x2="446" y2="618"/></g>
+          <g id="mpuBall" clip-path="url(#mpuTubeClip)"><circle cx="400" cy="589" r="24" fill="url(#mpuBallPaint)"/></g>
+        </svg>
+      </article>
+      </div>
+    </section>
+
+    <section class="instrument-group bno-group">
+      <div class="instrument-group-title"><h2>Instrumentos BNO055</h2><span>Datos calculados por el BNO055</span></div>
+      <div class="instruments">
+        <article class="instrument-card">
+          <div class="readout left"><small>Pitch</small><strong id="bnoPitchValue">0.00°</strong></div>
+          <div class="readout right"><small>Roll</small><strong id="bnoRollValue">0.00°</strong></div>
+          <canvas id="bnoHorizon" width="1000" height="1000" aria-label="Horizonte artificial BNO055"></canvas>
+          <div class="offset-control offset-display">
+            <span>Ajuste pitch <strong id="bnoOffsetValue">0°</strong></span>
+          </div>
+        </article>
+
+        <article class="instrument-card">
+          <div class="readout left"><small>Giro</small><strong id="bnoTurnValue">0.00°/s</strong></div>
+          <div class="readout right"><small>Bola</small><strong id="bnoBallValue">0.0°</strong></div>
+          <svg viewBox="0 0 800 800" aria-label="Coordinador de giro BNO055 con bola">
+            <defs>
+              <radialGradient id="bnoBezel" cx="40%" cy="32%"><stop stop-color="#777"/><stop offset=".48" stop-color="#34373a"/><stop offset="1" stop-color="#050607"/></radialGradient>
+              <radialGradient id="bnoFace"><stop stop-color="#30343a"/><stop offset=".65" stop-color="#171b1f"/><stop offset="1" stop-color="#080a0c"/></radialGradient>
+              <linearGradient id="bnoTube" x2="0" y2="1"><stop stop-color="#efedbd"/><stop offset=".55" stop-color="#85886d"/><stop offset="1" stop-color="#d7d6aa"/></linearGradient>
+              <radialGradient id="bnoBallPaint" cx="34%" cy="26%"><stop stop-color="#ccc"/><stop offset=".25" stop-color="#555"/><stop offset="1"/></radialGradient>
+              <clipPath id="bnoTubeClip"><path d="M250 548 Q400 580 550 548 L538 603 Q400 630 262 603Z"/></clipPath>
+            </defs>
+            <circle cx="400" cy="400" r="386" fill="#080808"/>
+            <circle cx="400" cy="400" r="375" fill="url(#bnoBezel)" stroke="#aaa" stroke-width="8"/>
+            <circle cx="400" cy="400" r="339" fill="url(#bnoFace)" stroke="#252a30" stroke-width="20"/>
+            <g fill="#fff"><rect x="127" y="391" width="49" height="19" rx="4"/><rect x="624" y="391" width="49" height="19" rx="4"/><rect x="155" y="493" width="48" height="18" rx="3" transform="rotate(-18 179 502)"/><rect x="597" y="493" width="48" height="18" rx="3" transform="rotate(18 621 502)"/></g>
+            <g id="bnoAircraft" fill="#fafafa">
+              <path d="M170 394 L350 387 L374 379 L385 328 Q388 318 400 318 Q412 318 415 328 L426 379 L450 387 L630 394 Q638 394 638 401 Q638 408 630 409 L449 416 L425 423 L414 435 Q408 441 400 441 Q392 441 386 435 L375 423 L351 416 L170 409 Q162 408 162 401 Q162 394 170 394Z"/>
+            </g>
+            <text x="400" y="520" fill="#fff" text-anchor="middle" font-size="25" font-family="Arial">TURN COORDINATOR</text>
+            <path d="M250 548 Q400 580 550 548 L538 603 Q400 630 262 603Z" fill="url(#bnoTube)" stroke="#d2d2aa" stroke-width="3"/>
+            <g stroke="#333" stroke-width="7"><line x1="350" y1="567" x2="354" y2="618"/><line x1="450" y1="567" x2="446" y2="618"/></g>
+            <g id="bnoBall" clip-path="url(#bnoTubeClip)"><circle cx="400" cy="589" r="24" fill="url(#bnoBallPaint)"/></g>
+          </svg>
+        </article>
+      </div>
+    </section>
+
+    <section class="telemetry">
+      <article class="sensor-card"><div class="sensor-title"><h2>MPU6050</h2><span id="mpuRate">0 Hz</span></div><div id="mpuData" class="values"></div></article>
+      <article class="sensor-card"><div class="sensor-title"><h2>BNO055</h2><div class="sensor-badges"><span id="bnoMode" class="mode-badge">—</span><span id="bnoRate">0 Hz</span></div></div><div id="bnoData" class="values"></div></article>
+    </section>
+    <footer>Fila superior: MPU6050 · Fila inferior: BNO055 · Chrome o Edge · localhost/HTTPS.</footer>
+  </main>
+  <script src="app.js?v=8"></script>
+</body>
+</html>
