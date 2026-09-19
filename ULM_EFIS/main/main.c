@@ -175,7 +175,7 @@ void app_main(void)
     vTaskDelay(pdMS_TO_TICKS(STARTUP_GPS_TO_I2C_DELAY_MS));
     ESP_ERROR_CHECK(GPS_start());
 
-    /* DataLogger SPIFFS: activacion centralizada en config.h. */
+    /* DataLogger circular en PSRAM: activación centralizada en config.h. */
 #if DATALOGGER_ENABLED
     esp_err_t logger_err = DataLogger_start();
 

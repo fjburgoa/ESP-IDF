@@ -9582,7 +9582,10 @@
                         "help": "Configure the delay time between waking up PSRAM halfsleep mode and the first access to PSRAM.\nRefer to the tXHS parameter in datasheet of the used PSRAM to configure this option.",
                         "id": "PM_SLP_SPIRAM_HALFSLEEP_EXIT_WAIT_DELAY",
                         "name": "PM_SLP_SPIRAM_HALFSLEEP_EXIT_WAIT_DELAY",
-                        "range": null,
+                        "range": [
+                            50,
+                            250
+                        ],
                         "title": "The time to wait for PSRAM to be able to access after exiting halfsleep mode (in us)",
                         "type": "int"
                     },
@@ -9916,7 +9919,10 @@
                                         "help": "If malloc() is capable of also allocating SPI-connected ram, its allocation strategy will prefer to\nallocate chunks less than this size in internal memory, while allocations larger than this will be\ndone from external RAM. If allocation from the preferred region fails, an attempt is made to allocate\nfrom the non-preferred region instead, so malloc() will not suddenly fail when either internal or\nexternal memory is full.",
                                         "id": "SPIRAM_MALLOC_ALWAYSINTERNAL",
                                         "name": "SPIRAM_MALLOC_ALWAYSINTERNAL",
-                                        "range": null,
+                                        "range": [
+                                            0,
+                                            131072
+                                        ],
                                         "title": "Maximum malloc() size, in bytes, to always put in internal memory",
                                         "type": "int"
                                     },
@@ -9936,7 +9942,10 @@
                                         "help": "Because the external/internal RAM allocation strategy is not always perfect, it sometimes may happen\nthat the internal memory is entirely filled up. This causes allocations that are specifically done in\ninternal memory, for example the stack for new tasks or memory to service DMA or have memory that's\nalso available when SPI cache is down, to fail. This option reserves a pool specifically for requests\nlike that;  a normal malloc() can fall back to the pool only after all other internal are exhausted.\n\nSet this to 0 to disable this feature.\n\nNote that because FreeRTOS stacks are forced to internal memory, they will also use this memory pool;\nbe sure to keep this in mind when adjusting this value.\n\nNote also that the DMA reserved pool may not be one single contiguous memory region, depending on the\nconfigured size and the static memory usage of the app.",
                                         "id": "SPIRAM_MALLOC_RESERVE_INTERNAL",
                                         "name": "SPIRAM_MALLOC_RESERVE_INTERNAL",
-                                        "range": null,
+                                        "range": [
+                                            0,
+                                            262144
+                                        ],
                                         "title": "Reserve this amount of bytes for data that specifically needs to be in DMA or internal memory",
                                         "type": "int"
                                     },
@@ -23315,254 +23324,6 @@
                 "depends_on": "!APP_BUILD_TYPE_PURE_RAM_APP",
                 "id": "component-config-spi-flash-driver-C:-esp-v6.1-esp-idf-components-spi_flash-Kconfig-193",
                 "title": "SPI Flash driver",
-                "type": "menu"
-            },
-            {
-                "children": [
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "Define maximum number of partitions that can be mounted.",
-                        "id": "SPIFFS_MAX_PARTITIONS",
-                        "name": "SPIFFS_MAX_PARTITIONS",
-                        "range": [
-                            1,
-                            10
-                        ],
-                        "title": "Maximum Number of Partitions",
-                        "type": "int"
-                    },
-                    {
-                        "children": [
-                            {
-                                "children": [
-                                    {
-                                        "children": [],
-                                        "depends_on": "SPIFFS_CACHE",
-                                        "help": "Enables memory write caching for file descriptors in hydrogen.",
-                                        "id": "SPIFFS_CACHE_WR",
-                                        "name": "SPIFFS_CACHE_WR",
-                                        "range": null,
-                                        "title": "Enable SPIFFS Write Caching",
-                                        "type": "bool"
-                                    },
-                                    {
-                                        "children": [],
-                                        "depends_on": "SPIFFS_CACHE",
-                                        "help": "Enable/disable statistics on caching. Debug/test purpose only.",
-                                        "id": "SPIFFS_CACHE_STATS",
-                                        "name": "SPIFFS_CACHE_STATS",
-                                        "range": null,
-                                        "title": "Enable SPIFFS Cache Statistics",
-                                        "type": "bool"
-                                    }
-                                ],
-                                "depends_on": null,
-                                "help": "Enables/disable memory read caching of nucleus file system\noperations.",
-                                "id": "SPIFFS_CACHE",
-                                "name": "SPIFFS_CACHE",
-                                "range": null,
-                                "title": "Enable SPIFFS Cache",
-                                "type": "bool"
-                            }
-                        ],
-                        "depends_on": null,
-                        "id": "component-config-spiffs-configuration-spiffs-cache-configuration-C:-esp-v6.1-esp-idf-components-spiffs-Kconfig-10",
-                        "title": "SPIFFS Cache Configuration",
-                        "type": "menu"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "Always check header of each accessed page to ensure consistent state.\nIf enabled it will increase number of reads from flash, especially\nif cache is disabled.",
-                        "id": "SPIFFS_PAGE_CHECK",
-                        "name": "SPIFFS_PAGE_CHECK",
-                        "range": null,
-                        "title": "Enable SPIFFS Page Check",
-                        "type": "bool"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "Define maximum number of GC runs to perform to reach desired free pages.",
-                        "id": "SPIFFS_GC_MAX_RUNS",
-                        "name": "SPIFFS_GC_MAX_RUNS",
-                        "range": [
-                            1,
-                            10000
-                        ],
-                        "title": "Set Maximum GC Runs",
-                        "type": "int"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "Enable/disable statistics on gc. Debug/test purpose only.",
-                        "id": "SPIFFS_GC_STATS",
-                        "name": "SPIFFS_GC_STATS",
-                        "range": null,
-                        "title": "Enable SPIFFS GC Statistics",
-                        "type": "bool"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "Logical page size of SPIFFS partition, in bytes. Must be multiple\nof flash page size (which is usually 256 bytes).\nLarger page sizes reduce overhead when storing large files, and\nimprove filesystem performance when reading large files.\nSmaller page sizes reduce overhead when storing small (< page size)\nfiles.",
-                        "id": "SPIFFS_PAGE_SIZE",
-                        "name": "SPIFFS_PAGE_SIZE",
-                        "range": [
-                            256,
-                            1024
-                        ],
-                        "title": "SPIFFS logical page size",
-                        "type": "int"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "Object name maximum length. Note that this length include the\nzero-termination character, meaning maximum string of characters\ncan at most be SPIFFS_OBJ_NAME_LEN - 1.\n\nSPIFFS_OBJ_NAME_LEN + SPIFFS_META_LENGTH should not exceed\nSPIFFS_PAGE_SIZE - 64.",
-                        "id": "SPIFFS_OBJ_NAME_LEN",
-                        "name": "SPIFFS_OBJ_NAME_LEN",
-                        "range": [
-                            1,
-                            256
-                        ],
-                        "title": "Set SPIFFS Maximum Name Length",
-                        "type": "int"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "If this option is enabled, symbolic links are taken into account\nduring partition image creation.",
-                        "id": "SPIFFS_FOLLOW_SYMLINKS",
-                        "name": "SPIFFS_FOLLOW_SYMLINKS",
-                        "range": null,
-                        "title": "Enable symbolic links for image creation",
-                        "type": "bool"
-                    },
-                    {
-                        "children": [
-                            {
-                                "children": [],
-                                "depends_on": "SPIFFS_USE_MAGIC",
-                                "help": "If this option is enabled, the magic will also be dependent\non the length of the filesystem. For example, a filesystem\nconfigured and formatted for 4 megabytes will not be accepted\nfor mounting with a configuration defining the filesystem as 2 megabytes.",
-                                "id": "SPIFFS_USE_MAGIC_LENGTH",
-                                "name": "SPIFFS_USE_MAGIC_LENGTH",
-                                "range": null,
-                                "title": "Enable SPIFFS Filesystem Length Magic",
-                                "type": "bool"
-                            }
-                        ],
-                        "depends_on": null,
-                        "help": "Enable this to have an identifiable spiffs filesystem.\nThis will look for a magic in all sectors to determine if this\nis a valid spiffs system or not at mount time.",
-                        "id": "SPIFFS_USE_MAGIC",
-                        "name": "SPIFFS_USE_MAGIC",
-                        "range": null,
-                        "title": "Enable SPIFFS Filesystem Magic",
-                        "type": "bool"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": null,
-                        "help": "This option sets the number of extra bytes stored in the file header.\nThese bytes can be used in an application-specific manner.\nSet this to at least 4 bytes to enable support for saving file\nmodification time.\n\nSPIFFS_OBJ_NAME_LEN + SPIFFS_META_LENGTH should not exceed\nSPIFFS_PAGE_SIZE - 64.",
-                        "id": "SPIFFS_META_LENGTH",
-                        "name": "SPIFFS_META_LENGTH",
-                        "range": null,
-                        "title": "Size of per-file metadata field",
-                        "type": "int"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": "SPIFFS_META_LENGTH >= 4",
-                        "help": "If enabled, then the first 4 bytes of per-file metadata will be used\nto store file modification time (mtime), accessible through\nstat/fstat functions.\nModification time is updated when the file is opened.",
-                        "id": "SPIFFS_USE_MTIME",
-                        "name": "SPIFFS_USE_MTIME",
-                        "range": null,
-                        "title": "Save file modification time",
-                        "type": "bool"
-                    },
-                    {
-                        "children": [],
-                        "depends_on": "SPIFFS_META_LENGTH >= 8",
-                        "help": "If this option is not set, the time field is 32 bits (up to 2106 year),\notherwise it is 64 bits and make sure it matches SPIFFS_META_LENGTH.\nIf the chip already has the spiffs image with the time field = 32 bits\nthen this option cannot be applied in this case.\nErase it first before using this option.\nTo resolve the Y2K38 problem for the spiffs, use a toolchain with\n64-bit time_t support.",
-                        "id": "SPIFFS_MTIME_WIDE_64_BITS",
-                        "name": "SPIFFS_MTIME_WIDE_64_BITS",
-                        "range": null,
-                        "title": "The time field occupies 64 bits in the image instead of 32 bits",
-                        "type": "bool"
-                    },
-                    {
-                        "children": [
-                            {
-                                "children": [],
-                                "depends_on": null,
-                                "help": "Enabling this option will print general debug messages to the console.",
-                                "id": "SPIFFS_DBG",
-                                "name": "SPIFFS_DBG",
-                                "range": null,
-                                "title": "Enable general SPIFFS debug",
-                                "type": "bool"
-                            },
-                            {
-                                "children": [],
-                                "depends_on": null,
-                                "help": "Enabling this option will print API debug messages to the console.",
-                                "id": "SPIFFS_API_DBG",
-                                "name": "SPIFFS_API_DBG",
-                                "range": null,
-                                "title": "Enable SPIFFS API debug",
-                                "type": "bool"
-                            },
-                            {
-                                "children": [],
-                                "depends_on": null,
-                                "help": "Enabling this option will print GC debug messages to the console.",
-                                "id": "SPIFFS_GC_DBG",
-                                "name": "SPIFFS_GC_DBG",
-                                "range": null,
-                                "title": "Enable SPIFFS Garbage Cleaner debug",
-                                "type": "bool"
-                            },
-                            {
-                                "children": [],
-                                "depends_on": "SPIFFS_CACHE",
-                                "help": "Enabling this option will print cache debug messages to the console.",
-                                "id": "SPIFFS_CACHE_DBG",
-                                "name": "SPIFFS_CACHE_DBG",
-                                "range": null,
-                                "title": "Enable SPIFFS Cache debug",
-                                "type": "bool"
-                            },
-                            {
-                                "children": [],
-                                "depends_on": null,
-                                "help": "Enabling this option will print Filesystem Check debug messages\nto the console.",
-                                "id": "SPIFFS_CHECK_DBG",
-                                "name": "SPIFFS_CHECK_DBG",
-                                "range": null,
-                                "title": "Enable SPIFFS Filesystem Check debug",
-                                "type": "bool"
-                            },
-                            {
-                                "children": [],
-                                "depends_on": null,
-                                "help": "Enable this option to enable SPIFFS_vis function in the API.",
-                                "id": "SPIFFS_TEST_VISUALISATION",
-                                "name": "SPIFFS_TEST_VISUALISATION",
-                                "range": null,
-                                "title": "Enable SPIFFS Filesystem Visualization",
-                                "type": "bool"
-                            }
-                        ],
-                        "depends_on": null,
-                        "id": "component-config-spiffs-configuration-debug-configuration-C:-esp-v6.1-esp-idf-components-spiffs-Kconfig-139",
-                        "title": "Debug Configuration",
-                        "type": "menu"
-                    }
-                ],
-                "depends_on": null,
-                "id": "component-config-spiffs-configuration-C:-esp-v6.1-esp-idf-components-spiffs-Kconfig-1",
-                "title": "SPIFFS Configuration",
                 "type": "menu"
             },
             {

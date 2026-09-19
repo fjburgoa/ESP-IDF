@@ -1776,7 +1776,22 @@
         </button>
       </div>
 
-      
+      <section class="logger-panel" aria-label="Registro de datos de vuelo">
+        <div class="logger-title">DATALOGGER · 25 Hz · BUFFER CIRCULAR</div>
+        <div id="loggerStatus" class="logger-status">
+          Preparando registrador...
+        </div>
+        <div class="logger-controls">
+          <button
+            id="loggerToggleButton"
+            class="logger-button record-button"
+            type="button"
+            disabled
+          >
+            INICIAR REGISTRO
+          </button>
+        </div>
+      </section>
 
       <div class="footer">
         <span id="messageRate">0 mensajes/s</span>
@@ -1830,6 +1845,9 @@
       const gMaxValueElement = document.getElementById("gMaxValue");
       const gMinValueElement = document.getElementById("gMinValue");
       const gResetButton = document.getElementById("gResetButton");
+      const loggerToggleButton =
+        document.getElementById("loggerToggleButton");
+      const loggerStatusElement = document.getElementById("loggerStatus");
       const mountModeVButton = document.getElementById("mountModeV");
       const mountModeHButton = document.getElementById("mountModeH");
       const attitudeButtons = Array.from(document.querySelectorAll(".attitude-option"));
@@ -1839,6 +1857,9 @@
       let received = 0;
       let latestFastData = null;
       let fastDisplayDirty = true;
+      let loggerRecording = false;
+      let loggerCommandPending = false;
+      let loggerDownloadPending = false;
       let displayedAltitudeFeet = 0;
       let targetAltitudeFeet = 0;
       let displayedVerticalSpeedFpm = 0;
@@ -1885,6 +1906,7 @@
         headingOffsetUpButton.disabled = !connected;
         headingOffsetDownButton.disabled = !connected;
         gResetButton.disabled = !connected;
+        loggerToggleButton.disabled = !connected || loggerCommandPending;
         mountModeVButton.disabled = !connected;
         mountModeHButton.disabled = !connected;
         attitudeButtons.forEach((button) => { button.disabled = !connected; });
@@ -2262,7 +2284,8 @@
         const normalized = Math.max(-1, Math.min(1, slipBallDeg / 25));
 
         return {
-          x: normalized * 112,
+          /* Invierte únicamente el desplazamiento horizontal de la bola. */
+          x: -normalized * 112,
           y: -10 * normalized * normalized,
         };
       }
@@ -3153,6 +3176,50 @@
         attitudeDiagnostic.textContent = "BNO086 · Game Rotation Vector";
       }
 
+      function updateLogger(data) {
+        if (data.length < 6) throw new Error("Trama L incompatible");
+
+        const wasRecording = loggerRecording;
+        loggerRecording = Number(data[1]) === 1;
+
+        const samples = Math.max(0, Number(data[2]) || 0);
+        const capacity = Math.max(0, Number(data[3]) || 0);
+        const wrapped = Number(data[4]) === 1;
+        const totalSamples = Math.max(0, Number(data[5]) || 0);
+
+        loggerCommandPending = false;
+        loggerToggleButton.disabled =
+          !socket || socket.readyState !== WebSocket.OPEN;
+        loggerToggleButton.classList.toggle("recording", loggerRecording);
+        loggerToggleButton.textContent = loggerRecording
+          ? "PARAR Y DESCARGAR CSV"
+          : "INICIAR REGISTRO";
+
+        if (loggerRecording) {
+          loggerStatusElement.textContent =
+            `Grabando: ${samples}/${capacity} muestras` +
+            (wrapped ? ` · circular · totales ${totalSamples}` : "");
+        } else if (samples > 0) {
+          loggerStatusElement.textContent =
+            `Detenido: ${samples} muestras disponibles` +
+            (wrapped ? ` · buffer circular completado · totales ${totalSamples}` : "");
+        } else {
+          loggerStatusElement.textContent = "Preparado · sin datos";
+        }
+
+        if (loggerDownloadPending && wasRecording && !loggerRecording) {
+          loggerDownloadPending = false;
+
+          /* El cambio de URL inicia la descarga sin abandonar el EFIS. */
+          const link = document.createElement("a");
+          link.href = `/download_log?t=${Date.now()}`;
+          link.download = "efis_datalogger.csv";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        }
+      }
+
       function updateTelemetry(data) {
         if (!Array.isArray(data) || data.length < 1) {
           throw new Error("Trama WebSocket incompatible");
@@ -3162,6 +3229,7 @@
           case "F": updateFast(data); break;
           case "N": updateNavigation(data); break;
           case "C": updateConfiguration(data); break;
+          case "L": updateLogger(data); break;
           default: throw new Error(`Tipo de trama desconocido: ${data[0]}`);
         }
       }
@@ -3304,6 +3372,25 @@
 
       enablePressAndHold(headingOffsetDownButton, "HEADING_OFFSET_DOWN");
       gResetButton.addEventListener("click", () => sendCommand("G_RESET"));
+
+      loggerToggleButton.addEventListener("click", () => {
+        if (loggerCommandPending ||
+            !socket || socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
+        loggerCommandPending = true;
+        loggerToggleButton.disabled = true;
+
+        if (loggerRecording) {
+          loggerDownloadPending = true;
+          sendCommand("LOGGER_STOP");
+        } else {
+          loggerDownloadPending = false;
+          sendCommand("LOGGER_START");
+        }
+      });
+
       setInterval(() => {
         document.getElementById("messageRate").textContent =
           `${received} mensajes/s`;

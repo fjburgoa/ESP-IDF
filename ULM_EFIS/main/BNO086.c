@@ -257,6 +257,12 @@ static float filter_yaw_rate(float input_dps, float dt_s)
 
     s_yaw_rate_filtered_dps += alpha * (input_dps - s_yaw_rate_filtered_dps);
 
+    if (s_yaw_rate_filtered_dps > 6.0)
+        s_yaw_rate_filtered_dps = 6.0;
+
+    if (s_yaw_rate_filtered_dps < -6.0)
+        s_yaw_rate_filtered_dps = -6.0;
+
     return (fabsf(s_yaw_rate_filtered_dps) < TURN_RATE_DEADBAND_DPS) ? 0.0f : s_yaw_rate_filtered_dps;
 }
 

@@ -25,7 +25,6 @@ idf_component_register(
         esp_driver_gpio
         esp_driver_uart
         esp_driver_tsens
-        spiffs
 )
 
 target_add_binary_data(
@@ -33,5 +32,4 @@ target_add_binary_data(
     "index.html"
     TEXT
 )
-
 

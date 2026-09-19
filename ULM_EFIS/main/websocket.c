@@ -49,6 +49,10 @@ static uint32_t s_imu_mode = 0U;
 static uint32_t s_attitude_mode = 0U;
 /* Se incrementa con cada cambio para provocar el envío de una trama C. */
 static uint32_t s_cfg_version = 1U;
+#if DATALOGGER_ENABLED
+/* Versión independiente para transmitir el estado L del registrador. */
+static uint32_t s_logger_version = 1U;
+#endif
 
 /* Último heading GPS válido. Sólo RAM: al arrancar comienza en 0 deg. */
 static float s_last_gps_heading_deg = 0.0f;
@@ -84,6 +88,9 @@ typedef struct
     uint32_t imu_mode;
     uint32_t attitude_mode;
     uint32_t cfg_version;
+#if DATALOGGER_ENABLED
+    uint32_t logger_version;
+#endif
 } settings_snapshot_t;
 
 /** Obtiene atómicamente los ajustes que se incluirán en telemetría. */
@@ -99,6 +106,9 @@ static settings_snapshot_t settings_get_snapshot(void)
     snapshot.imu_mode = s_imu_mode;
     snapshot.attitude_mode = s_attitude_mode;
     snapshot.cfg_version = s_cfg_version;
+#if DATALOGGER_ENABLED
+    snapshot.logger_version = s_logger_version;
+#endif
     portEXIT_CRITICAL(&s_settings_mux);
 
     return snapshot;
@@ -111,6 +121,16 @@ static void settings_mark_changed(void)
     ++s_cfg_version;
     portEXIT_CRITICAL(&s_settings_mux);
 }
+#if DATALOGGER_ENABLED
+//----------------------------------------------------------------------------------
+/** Fuerza el envío de una trama L con el estado actualizado del datalogger. */
+static void logger_mark_changed(void)
+{
+    portENTER_CRITICAL(&s_settings_mux);
+    ++s_logger_version;
+    portEXIT_CRITICAL(&s_settings_mux);
+}
+#endif
 //----------------------------------------------------------------------------------
 /** Guarda un entero con signo y confirma inmediatamente la transacción NVS. */
 static esp_err_t settings_save_i32(const char *key, int32_t value)
@@ -542,6 +562,34 @@ static esp_err_t websocket_handler(httpd_req_t *req)
 
         settings_mark_changed();
     }
+#if DATALOGGER_ENABLED
+    else if (strcmp((char *)payload, "LOGGER_START") == 0)
+    {
+        const esp_err_t logger_err = DataLogger_begin_recording();
+
+        if (logger_err != ESP_OK)
+        {
+            ESP_LOGW(TAG,
+                     "No se pudo iniciar el datalogger: %s",
+                     esp_err_to_name(logger_err));
+        }
+
+        logger_mark_changed();
+    }
+    else if (strcmp((char *)payload, "LOGGER_STOP") == 0)
+    {
+        const esp_err_t logger_err = DataLogger_stop_recording();
+
+        if (logger_err != ESP_OK)
+        {
+            ESP_LOGW(TAG,
+                     "No se pudo detener el datalogger: %s",
+                     esp_err_to_name(logger_err));
+        }
+
+        logger_mark_changed();
+    }
+#endif
     else if (strcmp((char *)payload, "G_RESET") == 0)
     {
         g_peak_reset();
@@ -553,6 +601,9 @@ static esp_err_t websocket_handler(httpd_req_t *req)
          * en el siguiente ciclo rápido.
          */
         settings_mark_changed();
+#if DATALOGGER_ENABLED
+        logger_mark_changed();
+#endif
     }
     else
     {
@@ -835,6 +886,10 @@ static void telemetry_task(void *arg)
     TickType_t last_navigation_time = xTaskGetTickCount();
 
     uint32_t last_cfg_version = 0U;
+#if DATALOGGER_ENABLED
+    uint32_t last_logger_version = 0U;
+    TickType_t last_logger_status_time = xTaskGetTickCount();
+#endif
 
     for (;;)
     {
@@ -995,6 +1050,28 @@ static void telemetry_task(void *arg)
                 settings.heading_offset_deg,
                 settings.mount_mode);
         }
+
+#if DATALOGGER_ENABLED
+        const datalogger_status_t logger = DataLogger_get_status();
+
+        /* L: al cambiar de estado y cada 500 ms mientras está grabando. */
+        if ((settings.logger_version != last_logger_version) ||
+            (logger.recording &&
+             ((now - last_logger_status_time) >= pdMS_TO_TICKS(500U))))
+        {
+            last_logger_version = settings.logger_version;
+            last_logger_status_time = now;
+
+            websocket_queue_json(
+                server,
+                "[\"L\",%u,%" PRIu32 ",%" PRIu32 ",%u,%" PRIu32 "]",
+                logger.recording ? 1U : 0U,
+                logger.samples,
+                logger.capacity,
+                logger.wrapped ? 1U : 0U,
+                logger.total_samples);
+        }
+#endif
     }
 }
 //----------------------------------------------------------------------------------

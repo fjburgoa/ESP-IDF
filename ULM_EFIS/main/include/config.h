@@ -19,7 +19,16 @@
  * Opciones generales
  * ========================================================================== */
 
-#define DATALOGGER_ENABLED 0
+#define DATALOGGER_ENABLED 1
+
+/*
+ * Registro inercial circular en PSRAM.
+ * 30000 muestras / 25 Hz = 1200 s = 20 minutos conservados.
+ */
+#define DATALOGGER_PERIOD_MS 40U
+#define DATALOGGER_MAX_SAMPLES 30000U
+#define DATALOGGER_TASK_STACK_SIZE 4096U
+#define DATALOGGER_TASK_PRIORITY 4U
 
 /*
  * Heading mostrado:
@@ -77,7 +86,7 @@
 #define BNO086_TASK_PRIORITY 5U
 
 /* Régimen de giro. */
-#define TURN_RATE_FILTER_TAU_S 5.0f
+#define TURN_RATE_FILTER_TAU_S 2.0f
 #define TURN_RATE_DEADBAND_DPS 0.10f
 
 /*
@@ -168,7 +177,7 @@
 #define GPS_NMEA_READ_TIMEOUT_MS 100U
 
 /* Ground Track solo se considera fiable por encima de esta velocidad. */
-#define GPS_HEADING_MIN_SPEED_KT 5.0f
+#define GPS_HEADING_MIN_SPEED_KT 4.0f
 
 /* ============================================================================
  * Arranque general

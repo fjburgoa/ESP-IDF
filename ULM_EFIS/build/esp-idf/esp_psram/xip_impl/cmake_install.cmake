@@ -1,4 +1,4 @@
-# Install script for directory: C:/esp/v6.1/esp-idf/components/spiffs
+# Install script for directory: C:/esp/v6.1/esp-idf/components/esp_psram/xip_impl
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -40,6 +40,6 @@ endif()
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS/build/esp-idf/spiffs/install_local_manifest.txt"
+  file(WRITE "C:/Users/fjbur/OneDrive/Documentos/ESP_programs/ULM_EFIS/build/esp-idf/esp_psram/xip_impl/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

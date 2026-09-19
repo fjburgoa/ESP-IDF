@@ -1,6 +1,6 @@
 /**
  * @file DataLogger.h
- * @brief Registro SPIFFS de aceleración vertical y tiempo GPS.
+ * @brief Registro circular en RAM de la telemetría inercial del EFIS.
  */
 
 #ifndef DATALOGGER_H
@@ -16,50 +16,68 @@
 extern "C" {
 #endif
 
+/** Una línea completa del registro, almacenada internamente en formato binario. */
 typedef struct
 {
-    bool mounted;
+    int64_t utc_time_ms;
+
+    /* Coordenadas GNSS en grados decimales. NAN indica ausencia de FIX. */
+    double latitude_deg;
+    double longitude_deg;
+
+    float acceleration_x_ms2;
+    float acceleration_y_ms2;
+    float acceleration_z_ms2;
+
+    float linear_acceleration_x_ms2;
+    float linear_acceleration_y_ms2;
+    float linear_acceleration_z_ms2;
+
+    float gravity_x_ms2;
+    float gravity_y_ms2;
+    float gravity_z_ms2;
+
+    float gyro_x_dps;
+    float gyro_y_dps;
+    float gyro_z_dps;
+
+    float pitch_deg;
+    float roll_deg;
+    float slip_ball_deg;
+    float turn_rate_dps;
+} datalogger_sample_t;
+
+typedef struct
+{
+    bool initialized;
     bool recording;
-    bool file_available;
+    bool data_available;
+    bool wrapped;
 
     uint32_t samples;
-    size_t file_size_bytes;
-
+    uint32_t capacity;
+    uint32_t total_samples;
+    size_t memory_bytes;
 } datalogger_status_t;
 
-/**
- * @brief Monta la partición SPIFFS "FicheroAcelerac" y crea la tarea.
- *
- * Tras un reset recording siempre comienza en false.
- *
- * La primera vez, si la partición está completamente borrada (0xFF) y no
- * contiene todavía un sistema de archivos, se permite formatearla.
- * Si contiene datos pero falla el montaje, NO se formatea automáticamente.
- */
+/** Reserva el buffer circular y crea la tarea de adquisición. */
 esp_err_t DataLogger_start(void);
 
-/**
- * @brief Comienza un registro nuevo.
- *
- * Abre /spiffs/aceleracion.csv con "w", por lo que el fichero anterior
- * se trunca. Requiere BNO086 válido y fecha/hora GPS válida.
- */
+/** Vacía lógicamente el buffer e inicia una grabación nueva. */
 esp_err_t DataLogger_begin_recording(void);
 
-/**
- * @brief Detiene la grabación y cierra limpiamente el fichero.
- */
+/** Detiene la adquisición conservando en RAM las muestras registradas. */
 esp_err_t DataLogger_stop_recording(void);
 
-/**
- * @brief Devuelve una instantánea del estado del registrador.
- */
+/** Devuelve una instantánea coherente del estado del registrador. */
 datalogger_status_t DataLogger_get_status(void);
 
 /**
- * @brief Ruta VFS del fichero CSV.
+ * Copia una muestra por índice cronológico: 0 es la más antigua conservada.
+ * Solo se permite leer después de detener la grabación.
  */
-const char *DataLogger_get_file_path(void);
+esp_err_t DataLogger_get_sample(uint32_t chronological_index,
+                                datalogger_sample_t *sample);
 
 #ifdef __cplusplus
 }

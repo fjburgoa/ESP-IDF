@@ -1,152 +1,110 @@
 /**
  * @file DataLogger.c
- * @brief Data logger SPIFFS para el experimento de aceleración vertical.
+ * @brief Registrador circular en PSRAM/RAM a la frecuencia del BNO086.
  *
- * Formato CSV:
- *
- *   utc,accel_z_ms2
- *   2026-08-12T18:23:01Z,9.80742
- *
- * Se registra una muestra por segundo. Después de cada fprintf() se ejecuta
- * fflush(), de modo que ante una pérdida de alimentación las muestras previas
- * ya transferidas al sistema de archivos permanecen en Flash.
+ * Las muestras se guardan como estructuras binarias de tamaño fijo. Esto evita
+ * escribir Flash cada 40 ms y permite sobrescribir de forma determinista la
+ * muestra más antigua cuando el buffer se llena. El servidor HTTP convierte el
+ * contenido a CSV, en orden cronológico, después de detener la grabación.
  */
 
 #include "DataLogger.h"
 
 #include <inttypes.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <time.h>
+#include <math.h>
+#include <stdlib.h>
 
 #include "BNO086.h"
-#include "BMP280.h"
 #include "GPS.h"
+#include "config.h"
 
-#include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "esp_partition.h"
-#include "esp_spiffs.h"
+#include "esp_timer.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-/* -------------------------------------------------------------------------- */
-
-#define DATALOGGER_PARTITION_LABEL "FicheroAcelerac"
-#define DATALOGGER_BASE_PATH "/spiffs"
-#define DATALOGGER_FILE_PATH "/spiffs/aceleracion.csv"
-
-#define DATALOGGER_PERIOD_MS 1000U
-#define DATALOGGER_TASK_STACK_SIZE 4096U
-#define DATALOGGER_TASK_PRIORITY 4U
-
-/* -------------------------------------------------------------------------- */
-
 static const char *TAG = "DATALOGGER";
 
-static FILE *s_file = NULL;
+static datalogger_sample_t *s_buffer = NULL;
 static TaskHandle_t s_task = NULL;
 static SemaphoreHandle_t s_mutex = NULL;
 
-static bool s_mounted = false;
+/* Índice de la próxima escritura y número de posiciones válidas. */
+static uint32_t s_write_index = 0U;
+static uint32_t s_sample_count = 0U;
+static uint32_t s_total_samples = 0U;
+
+static bool s_initialized = false;
 static bool s_recording = false;
-static uint32_t s_samples = 0U;
+static bool s_wrapped = false;
 
-/* -------------------------------------------------------------------------- */
-static esp_err_t datalogger_mount_spiffs(void)
-{
-    /*
-     * La partición FicheroAcelerac se ha creado expresamente para este
-     * registrador. En el primer arranque puede estar completamente virgen
-     * y todavía no contener un sistema de archivos SPIFFS válido.
-     *
-     * format_if_mount_failed=true permite formatearla automáticamente en
-     * ese primer montaje.
-     *
-     * IMPORTANTE:
-     * Una vez montada correctamente, los siguientes arranques no formatean
-     * la partición: simplemente montan el SPIFFS existente.
-     */
-    esp_vfs_spiffs_conf_t conf = {
-        .base_path = DATALOGGER_BASE_PATH,
-        .partition_label = DATALOGGER_PARTITION_LABEL,
-        .max_files = 4,
-        .format_if_mount_failed = true,
-    };
-
-    ESP_LOGI(
-        TAG,
-        "Montando SPIFFS '%s' en %s",
-        DATALOGGER_PARTITION_LABEL,
-        DATALOGGER_BASE_PATH);
-
-    const esp_err_t err =
-        esp_vfs_spiffs_register(&conf);
-
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(
-            TAG,
-            "No se pudo montar/formatear SPIFFS '%s': %s",
-            DATALOGGER_PARTITION_LABEL,
-            esp_err_to_name(err));
-
-        s_mounted = false;
-        return err;
-    }
-
-    s_mounted = true;
-
-    ESP_LOGI(
-        TAG,
-        "SPIFFS '%s' montado correctamente",
-        DATALOGGER_PARTITION_LABEL);
-
-    return ESP_OK;
-}
-
-/* -------------------------------------------------------------------------- */
-static size_t datalogger_file_size(void)
-{
-    struct stat st;
-
-    if (stat(DATALOGGER_FILE_PATH, &st) != 0)
-    {
-        return 0U;
-    }
-
-    return (size_t)st.st_size;
-}
+/* Relación entre el reloj monotónico y UTC fijada al comenzar la grabación. */
+static int64_t s_start_monotonic_us = 0;
+static int64_t s_start_utc_ms = 0;
 
 /* -------------------------------------------------------------------------- */
 static bool datalogger_utc_valid(const gps_data_t *gps)
 {
-    if (gps == NULL)
-    {
-        return false;
-    }
-
-    return gps->fix_valid &&
-           (gps->utc_timestamp > 0U);
+    return (gps != NULL) && gps->fix_valid && (gps->utc_timestamp > 0U);
 }
 
 /* -------------------------------------------------------------------------- */
-static void datalogger_task(void *pvParameters)
+static void datalogger_fill_sample(datalogger_sample_t *destination,
+                                   const bno086_data_t *imu,
+                                   const gps_data_t *gps,
+                                   int64_t monotonic_us)
 {
-    (void)pvParameters;
+    destination->utc_time_ms =
+        s_start_utc_ms + (monotonic_us - s_start_monotonic_us) / 1000;
+
+    /*
+     * El GNSS se actualiza más despacio que el BNO086. Por eso varias muestras
+     * consecutivas pueden contener las mismas coordenadas. Si se pierde el FIX,
+     * NAN permite distinguirlo de una posición real situada en 0°, 0°.
+     */
+    destination->latitude_deg =
+        (gps != NULL) && gps->fix_valid ? gps->latitude_deg : NAN;
+    destination->longitude_deg =
+        (gps != NULL) && gps->fix_valid ? gps->longitude_deg : NAN;
+
+    destination->acceleration_x_ms2 = imu->acceleration_ms2.x;
+    destination->acceleration_y_ms2 = imu->acceleration_ms2.y;
+    destination->acceleration_z_ms2 = imu->acceleration_ms2.z;
+
+    destination->linear_acceleration_x_ms2 = imu->linear_acceleration_ms2.x;
+    destination->linear_acceleration_y_ms2 = imu->linear_acceleration_ms2.y;
+    destination->linear_acceleration_z_ms2 = imu->linear_acceleration_ms2.z;
+
+    destination->gravity_x_ms2 = imu->gravity_ms2.x;
+    destination->gravity_y_ms2 = imu->gravity_ms2.y;
+    destination->gravity_z_ms2 = imu->gravity_ms2.z;
+
+    destination->gyro_x_dps = imu->gyro_dps.x;
+    destination->gyro_y_dps = imu->gyro_dps.y;
+    destination->gyro_z_dps = imu->gyro_dps.z;
+
+    destination->pitch_deg = imu->pitch_deg;
+    destination->roll_deg = imu->roll_deg;
+    destination->slip_ball_deg = imu->slip_ball_deg;
+    destination->turn_rate_dps = imu->yaw_rate_dps;
+}
+
+/* -------------------------------------------------------------------------- */
+static void datalogger_task(void *argument)
+{
+    (void)argument;
 
     TickType_t last_wake = xTaskGetTickCount();
-
     const TickType_t period = pdMS_TO_TICKS(DATALOGGER_PERIOD_MS);
 
     for (;;)
     {
         bool recording = false;
 
-        if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100U)) == pdTRUE)
+        if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10U)) == pdTRUE)
         {
             recording = s_recording;
             xSemaphoreGive(s_mutex);
@@ -155,56 +113,40 @@ static void datalogger_task(void *pvParameters)
         if (recording)
         {
             const bno086_data_t imu = BNO086_get_data();
-
             const gps_data_t gps = GPS_get_data();
+            const int64_t monotonic_us = esp_timer_get_time();
 
-            if (!imu.valid)
-                ESP_LOGW(TAG, "Muestra omitida: BNO086 todavía no válido");
-            else if (!datalogger_utc_valid(&gps))
-                ESP_LOGW(TAG, "Muestra omitida: fecha/hora GPS no válida");
-            else if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(250U)) == pdTRUE)
+            if (imu.valid)
             {
-                if (s_recording && (s_file != NULL))
+                datalogger_sample_t sample;
+                datalogger_fill_sample(&sample, &imu, &gps, monotonic_us);
+
+                if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10U)) == pdTRUE)
                 {
-                    const time_t utc_time = (time_t)gps.utc_timestamp;
-                    struct tm utc_tm = {0};
-
-                    gmtime_r(&utc_time, &utc_tm);
-
-                    const int written = fprintf(
-                        s_file,
-                        "%04d-%02d-%02dT%02d:%02d:%02dZ,%.5f,%.2f;\n",
-                        utc_tm.tm_year + 1900,
-                        utc_tm.tm_mon + 1,
-                        utc_tm.tm_mday,
-                        utc_tm.tm_hour,
-                        utc_tm.tm_min,
-                        utc_tm.tm_sec,
-                        (double)imu.acceleration_ms2.z,
-                        (double)pressure_hpa);
-
-                    if (written > 0)
+                    if (s_recording)
                     {
-                        /*
-                         * Decisión de diseño: vaciar stdio después de CADA
-                         * muestra para minimizar pérdidas ante power-off.
-                         */
-                        if (fflush(s_file) == 0)
-                            ++s_samples;
-                        else
-                            ESP_LOGE(TAG, "Error haciendo fflush() del registro");
-                    }
-                    else
-                        ESP_LOGE(TAG, "Error escribiendo una muestra CSV");
-                }
+                        s_buffer[s_write_index] = sample;
+                        s_write_index =
+                            (s_write_index + 1U) % DATALOGGER_MAX_SAMPLES;
 
-                xSemaphoreGive(s_mutex);
+                        if (s_sample_count < DATALOGGER_MAX_SAMPLES)
+                        {
+                            ++s_sample_count;
+                        }
+                        else
+                        {
+                            s_wrapped = true;
+                        }
+
+                        ++s_total_samples;
+                    }
+
+                    xSemaphoreGive(s_mutex);
+                }
             }
         }
 
-        vTaskDelayUntil(
-            &last_wake,
-            period);
+        vTaskDelayUntil(&last_wake, period);
     }
 }
 
@@ -212,64 +154,80 @@ static void datalogger_task(void *pvParameters)
 esp_err_t DataLogger_start(void)
 {
     if (s_task != NULL)
+    {
         return ESP_ERR_INVALID_STATE;
+    }
 
     s_mutex = xSemaphoreCreateMutex();
 
     if (s_mutex == NULL)
+    {
         return ESP_ERR_NO_MEM;
+    }
 
-    esp_err_t err = datalogger_mount_spiffs();
+    const size_t memory_bytes =
+        (size_t)DATALOGGER_MAX_SAMPLES * sizeof(datalogger_sample_t);
 
-    if (err != ESP_OK)
+    const size_t psram_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    const size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+
+    if (psram_total == 0U)
     {
         vSemaphoreDelete(s_mutex);
         s_mutex = NULL;
-        return err;
+        ESP_LOGE(TAG,
+                 "PSRAM no disponible; active CONFIG_SPIRAM en menuconfig");
+        return ESP_ERR_NOT_SUPPORTED;
     }
 
-    size_t total_bytes = 0U;
-    size_t used_bytes = 0U;
+    /* El buffer se fuerza a PSRAM para no agotar la SRAM interna del sistema. */
+    s_buffer = heap_caps_calloc(
+        DATALOGGER_MAX_SAMPLES,
+        sizeof(datalogger_sample_t),
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
-    if (esp_spiffs_info(
-            DATALOGGER_PARTITION_LABEL,
-            &total_bytes,
-            &used_bytes) == ESP_OK)
+    if (s_buffer == NULL)
     {
-        ESP_LOGI(
-            TAG,
-            "SPIFFS montado: total=%u bytes, usados=%u bytes",
-            (unsigned)total_bytes,
-            (unsigned)used_bytes);
-    }
-    else
-    {
-        ESP_LOGW(
-            TAG,
-            "SPIFFS montado, pero no se pudo consultar su capacidad");
+        vSemaphoreDelete(s_mutex);
+        s_mutex = NULL;
+        ESP_LOGE(TAG,
+                 "PSRAM insuficiente: solicitados=%u, libres=%u, total=%u bytes",
+                 (unsigned)memory_bytes,
+                 (unsigned)psram_free,
+                 (unsigned)psram_total);
+        return ESP_ERR_NO_MEM;
     }
 
-    /*
-     * Nunca se reanuda automáticamente una grabación después de reset.
-     * El fichero previo permanece disponible para descarga.
-     */
+    s_write_index = 0U;
+    s_sample_count = 0U;
+    s_total_samples = 0U;
     s_recording = false;
-    s_file = NULL;
-    s_samples = 0U;
+    s_wrapped = false;
+    s_initialized = true;
 
-    BaseType_t ok = xTaskCreate(datalogger_task, "data_logger", DATALOGGER_TASK_STACK_SIZE, NULL, DATALOGGER_TASK_PRIORITY, &s_task);
+    const BaseType_t created = xTaskCreate(
+        datalogger_task,
+        "data_logger",
+        DATALOGGER_TASK_STACK_SIZE,
+        NULL,
+        DATALOGGER_TASK_PRIORITY,
+        &s_task);
 
-    if (ok != pdPASS)
+    if (created != pdPASS)
     {
-        s_task = NULL;
-        esp_vfs_spiffs_unregister(DATALOGGER_PARTITION_LABEL);
-        s_mounted = false;
+        s_initialized = false;
+        heap_caps_free(s_buffer);
+        s_buffer = NULL;
         vSemaphoreDelete(s_mutex);
         s_mutex = NULL;
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "DataLogger preparado; fichero: %s", DATALOGGER_FILE_PATH);
+    ESP_LOGI(TAG,
+             "Buffer circular preparado: %u muestras, %u bytes, periodo=%u ms",
+             (unsigned)DATALOGGER_MAX_SAMPLES,
+             (unsigned)memory_bytes,
+             (unsigned)DATALOGGER_PERIOD_MS);
 
     return ESP_OK;
 }
@@ -277,44 +235,30 @@ esp_err_t DataLogger_start(void)
 /* -------------------------------------------------------------------------- */
 esp_err_t DataLogger_begin_recording(void)
 {
-    if (!s_mounted)
+    if (!s_initialized || (s_mutex == NULL) || (s_buffer == NULL))
     {
-        ESP_LOGE(TAG, "No se puede grabar: SPIFFS no está montado");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    if (s_mutex == NULL)
-    {
-        ESP_LOGE(TAG, "No se puede grabar: mutex no inicializado");
         return ESP_ERR_INVALID_STATE;
     }
 
     const bno086_data_t imu = BNO086_get_data();
     const gps_data_t gps = GPS_get_data();
 
-    ESP_LOGI(TAG,
-             "Estado previo a grabación: "
-             "IMU=%d FIX=%d GPSvalid=%d "
-             "UTC timestamp=%" PRIu32,
-             imu.valid,
-             gps.fix_valid,
-             gps.valid,
-             gps.utc_timestamp);
-
     if (!imu.valid)
     {
-        ESP_LOGW(TAG, "No se puede grabar: BNO086 no válido");
+        ESP_LOGW(TAG, "No se puede grabar: BNO086 todavía no válido");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (!datalogger_utc_valid(&gps))
     {
-        ESP_LOGW(TAG, "No se puede grabar: fecha/hora GPS no válida");
+        ESP_LOGW(TAG, "No se puede grabar: FIX y fecha/hora GPS no válidos");
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(500U)) != pdTRUE)
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100U)) != pdTRUE)
+    {
         return ESP_ERR_TIMEOUT;
+    }
 
     if (s_recording)
     {
@@ -322,82 +266,48 @@ esp_err_t DataLogger_begin_recording(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    //
-    // "w" crea un registro limpio. El fichero anterior solo se destruye
-    // cuando el usuario pulsa explícitamente GRABAR.
-    //
-    s_file = fopen(DATALOGGER_FILE_PATH, "w");
+    s_write_index = 0U;
+    s_sample_count = 0U;
+    s_total_samples = 0U;
+    s_wrapped = false;
 
-    if (s_file == NULL)
-    {
-        xSemaphoreGive(s_mutex);
-        ESP_LOGE(TAG, "No se pudo crear el fichero CSV");
-        return ESP_FAIL;
-    }
-
-    if (fprintf(s_file, "utc,accel_z_ms2,pressure_hpa\n") <= 0)
-    {
-        fclose(s_file);
-        s_file = NULL;
-        xSemaphoreGive(s_mutex);
-        return ESP_FAIL;
-    }
-
-    if (fflush(s_file) != 0)
-    {
-        fclose(s_file);
-        s_file = NULL;
-        xSemaphoreGive(s_mutex);
-        return ESP_FAIL;
-    }
-
-    s_samples = 0U;
+    s_start_monotonic_us = esp_timer_get_time();
+    s_start_utc_ms = (int64_t)gps.utc_timestamp * 1000;
     s_recording = true;
 
     xSemaphoreGive(s_mutex);
 
-    ESP_LOGI(TAG, "Grabación iniciada: %s", DATALOGGER_FILE_PATH);
-
+    ESP_LOGI(TAG, "Grabación circular iniciada a %u Hz",
+             (unsigned)(1000U / DATALOGGER_PERIOD_MS));
     return ESP_OK;
 }
 
 /* -------------------------------------------------------------------------- */
 esp_err_t DataLogger_stop_recording(void)
 {
-    if (!s_mounted || (s_mutex == NULL))
-        return ESP_ERR_INVALID_STATE;
-
-    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(1000U)) != pdTRUE)
-        return ESP_ERR_TIMEOUT;
-
-    if (!s_recording)
+    if (!s_initialized || (s_mutex == NULL))
     {
-        xSemaphoreGive(s_mutex);
-        return ESP_OK;
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100U)) != pdTRUE)
+    {
+        return ESP_ERR_TIMEOUT;
     }
 
     s_recording = false;
-
-    esp_err_t result = ESP_OK;
-
-    if (s_file != NULL)
-    {
-        if (fflush(s_file) != 0)
-            result = ESP_FAIL;
-
-        if (fclose(s_file) != 0)
-            result = ESP_FAIL;
-
-        s_file = NULL;
-    }
-
-    const uint32_t samples = s_samples;
+    const uint32_t samples = s_sample_count;
+    const uint32_t total_samples = s_total_samples;
+    const bool wrapped = s_wrapped;
 
     xSemaphoreGive(s_mutex);
 
-    ESP_LOGI(TAG, "Grabación detenida: %" PRIu32 " muestras", samples);
-
-    return result;
+    ESP_LOGI(TAG,
+             "Grabación detenida: conservadas=%u, totales=%u, circular=%s",
+             (unsigned)samples,
+             (unsigned)total_samples,
+             wrapped ? "sí" : "no");
+    return ESP_OK;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -406,26 +316,55 @@ datalogger_status_t DataLogger_get_status(void)
     datalogger_status_t status = {0};
 
     if (s_mutex == NULL)
-        return status;
-
-    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100U)) == pdTRUE)
     {
-        status.mounted = s_mounted;
+        return status;
+    }
+
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(20U)) == pdTRUE)
+    {
+        status.initialized = s_initialized;
         status.recording = s_recording;
-        status.samples = s_samples;
+        status.data_available = s_sample_count > 0U;
+        status.wrapped = s_wrapped;
+        status.samples = s_sample_count;
+        status.capacity = DATALOGGER_MAX_SAMPLES;
+        status.total_samples = s_total_samples;
+        status.memory_bytes =
+            (size_t)DATALOGGER_MAX_SAMPLES * sizeof(datalogger_sample_t);
 
         xSemaphoreGive(s_mutex);
     }
-
-    status.file_size_bytes = datalogger_file_size();
-
-    status.file_available = status.file_size_bytes > 0U;
 
     return status;
 }
 
 /* -------------------------------------------------------------------------- */
-const char *DataLogger_get_file_path(void)
+esp_err_t DataLogger_get_sample(uint32_t chronological_index,
+                                datalogger_sample_t *sample)
 {
-    return DATALOGGER_FILE_PATH;
+    if ((sample == NULL) || !s_initialized || (s_mutex == NULL))
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100U)) != pdTRUE)
+    {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    if (s_recording || (chronological_index >= s_sample_count))
+    {
+        xSemaphoreGive(s_mutex);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const uint32_t oldest_index =
+        (s_sample_count == DATALOGGER_MAX_SAMPLES) ? s_write_index : 0U;
+    const uint32_t physical_index =
+        (oldest_index + chronological_index) % DATALOGGER_MAX_SAMPLES;
+
+    *sample = s_buffer[physical_index];
+
+    xSemaphoreGive(s_mutex);
+    return ESP_OK;
 }
