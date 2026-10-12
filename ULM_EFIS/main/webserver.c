@@ -57,6 +57,7 @@ static esp_err_t download_log_get_handler(httpd_req_t *req)
 
     static const char header[] =
         "date_utc,time_utc,latitude_deg,longitude_deg,"
+        "gps_ground_speed_knots,barometric_altitude_m,"
         "accel_x_ms2,accel_y_ms2,accel_z_ms2,"
         "linear_x_ms2,linear_y_ms2,linear_z_ms2,"
         "gravity_x_ms2,gravity_y_ms2,gravity_z_ms2,"
@@ -89,6 +90,7 @@ static esp_err_t download_log_get_handler(httpd_req_t *req)
             sizeof(line),
             "%04d-%02d-%02d,%02d:%02d:%02d.%03u,"
             "%.8f,%.8f,"
+            "%.3f,%.3f,"
             "%.5f,%.5f,%.5f,"
             "%.5f,%.5f,%.5f,"
             "%.5f,%.5f,%.5f,"
@@ -103,6 +105,8 @@ static esp_err_t download_log_get_handler(httpd_req_t *req)
             milliseconds,
             sample.latitude_deg,
             sample.longitude_deg,
+            (double)sample.gps_ground_speed_knots,
+            (double)sample.barometric_altitude_m,
             (double)sample.acceleration_x_ms2,
             (double)sample.acceleration_y_ms2,
             (double)sample.acceleration_z_ms2,

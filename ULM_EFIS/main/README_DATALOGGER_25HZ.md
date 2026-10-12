@@ -22,8 +22,8 @@ La configuración predeterminada es:
 #define DATALOGGER_MAX_SAMPLES 30000U
 ```
 
-A 25 Hz conserva 20 minutos. Cada muestra ocupa 88 bytes, por lo que el anillo
-reserva aproximadamente 2,64 MB de PSRAM. Al llenarse, la siguiente muestra
+A 25 Hz conserva 20 minutos. Cada muestra ocupa 96 bytes, por lo que el anillo
+reserva aproximadamente 2,88 MB de PSRAM. Al llenarse, la siguiente muestra
 sobrescribe la más antigua.
 
 ## Funcionamiento
@@ -39,6 +39,7 @@ sobrescribe la más antigua.
 
 ```text
 date_utc,time_utc,latitude_deg,longitude_deg,
+gps_ground_speed_knots,barometric_altitude_m,
 accel_x_ms2,accel_y_ms2,accel_z_ms2,
 linear_x_ms2,linear_y_ms2,linear_z_ms2,
 gravity_x_ms2,gravity_y_ms2,gravity_z_ms2,
@@ -50,4 +51,5 @@ Cada muestra ocupa una única línea. `accel_*` es la aceleración total escalad
 en m/s², antes de eliminar la gravedad; `linear_*` es la aceleración lineal
 proporcionada por SH-2. Las coordenadas se expresan en grados decimales con
 ocho cifras decimales; si el GNSS no dispone de FIX, ambas columnas contienen
-`nan`.
+`nan`. `gps_ground_speed_knots` es la velocidad GPS sobre el terreno en nudos y
+`barometric_altitude_m` es la altitud barométrica del EFIS en metros.

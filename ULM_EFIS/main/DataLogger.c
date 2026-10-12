@@ -14,6 +14,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include "BMP280.h"
 #include "BNO086.h"
 #include "GPS.h"
 #include "config.h"
@@ -55,6 +56,7 @@ static bool datalogger_utc_valid(const gps_data_t *gps)
 static void datalogger_fill_sample(datalogger_sample_t *destination,
                                    const bno086_data_t *imu,
                                    const gps_data_t *gps,
+                                   float barometric_altitude_m,
                                    int64_t monotonic_us)
 {
     destination->utc_time_ms =
@@ -69,6 +71,12 @@ static void datalogger_fill_sample(datalogger_sample_t *destination,
         (gps != NULL) && gps->fix_valid ? gps->latitude_deg : NAN;
     destination->longitude_deg =
         (gps != NULL) && gps->fix_valid ? gps->longitude_deg : NAN;
+    destination->gps_ground_speed_knots =
+        (gps != NULL) && gps->fix_valid && isfinite(gps->ground_speed_knots)
+            ? gps->ground_speed_knots
+            : NAN;
+    destination->barometric_altitude_m =
+        isfinite(barometric_altitude_m) ? barometric_altitude_m : NAN;
 
     destination->acceleration_x_ms2 = imu->acceleration_ms2.x;
     destination->acceleration_y_ms2 = imu->acceleration_ms2.y;
@@ -114,12 +122,18 @@ static void datalogger_task(void *argument)
         {
             const bno086_data_t imu = BNO086_get_data();
             const gps_data_t gps = GPS_get_data();
+            const float current_barometric_altitude_m = altitude;
             const int64_t monotonic_us = esp_timer_get_time();
 
             if (imu.valid)
             {
                 datalogger_sample_t sample;
-                datalogger_fill_sample(&sample, &imu, &gps, monotonic_us);
+                datalogger_fill_sample(
+                    &sample,
+                    &imu,
+                    &gps,
+                    current_barometric_altitude_m,
+                    monotonic_us);
 
                 if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10U)) == pdTRUE)
                 {

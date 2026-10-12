@@ -25,6 +25,10 @@ typedef struct
     double latitude_deg;
     double longitude_deg;
 
+    /* Navegación: velocidad GPS y altitud barométrica del EFIS. */
+    float gps_ground_speed_knots;
+    float barometric_altitude_m;
+
     float acceleration_x_ms2;
     float acceleration_y_ms2;
     float acceleration_z_ms2;

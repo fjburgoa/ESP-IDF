@@ -1,0 +1,5 @@
+"-specs=C:/Users/fjbur/OneDrive/Documentos/ESP_programs/OSCILOSCOPIO_USB/build/bootloader/specs/picolibc.specs"
+-mlongcalls
+-fno-builtin-memcpy
+-fno-builtin-memset
+-fno-builtin-bzero

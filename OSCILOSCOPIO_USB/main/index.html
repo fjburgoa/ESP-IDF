@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Osciloscopio didáctico · ESP32-S3</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background:#0c1220; color:#e5edf8; }
+  body { max-width:1200px; margin:28px auto; padding:0 18px; }
+  h1 { margin:0 0 5px; font-size:1.65rem; } p {color:#a8b9cd}
+  .bar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin:20px 0; }
+  button,select {background:#20314b;color:#fff;border:1px solid #45607e;border-radius:8px;padding:9px 12px;font:inherit}
+  button {cursor:pointer} button:disabled {opacity:.5;cursor:default}
+  label {display:flex;align-items:center;gap:8px} input[type=range] {width:110px}
+  .plot {position:relative;border:1px solid #344760;border-radius:10px;overflow:hidden;background:#0b1624}
+  canvas {width:100%;height:470px;display:block}
+  .legend {display:flex;gap:22px;flex-wrap:wrap;margin:16px 0}
+  .ch1 {color:#ffd166}.ch2 {color:#51d5e8} .muted {color:#9fb0c5}
+  #status {padding:7px 10px;border-radius:7px;background:#1a293e}
+  .hint {font-size:.9rem;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Osciloscopio didáctico</h1>
+<p>Dos canales · ESP32-S3 · señal de prueba 50 Hz y 75 Hz</p>
+<div class="bar">
+  <button id="connect">Conectar puerto serie</button><button id="pause" disabled>Pausar</button>
+  <label>Tiempo/div <select id="timebase"><option value="2">2 ms</option><option value="5" selected>5 ms</option><option value="10">10 ms</option><option value="20">20 ms</option></select></label>
+  <label>Disparo <select id="trigger"><option value="0">CH1 ↑</option><option value="1">CH2 ↑</option><option value="-1">Libre</option></select></label>
+  <label>Nivel <input id="level" type="range" min="5" max="95" value="50"><span id="levelText">1,65 V</span></label>
+  <span id="status" role="status">Desconectado</span>
+</div>
+<div class="plot"><canvas id="scope"></canvas></div>
+<div class="legend"><strong class="ch1" id="ch1info">● CH1: —</strong><strong class="ch2" id="ch2info">● CH2: —</strong><span class="muted" id="stats">Esperando datos</span></div>
+<p class="hint">Las trazas de prueba representan 0 y 3,3 V. Este ejemplo todavía no lee entradas ADC. Conecta el USB principal (CH343P) de la placa; el navegador debe permitir Web Serial.</p>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const canvas = $("scope"), ctx = canvas.getContext("2d");
+const HEADER = 20, MAX_PAIRS = 1000, MAGIC = [83,67,80,49], CAPACITY = 5000;
+let port = null, reader = null, running = false, paused = false, pending = new Uint8Array(0);
+let ch1 = [], ch2 = [], sampleRate = 5000, lastSequence = null, lost = 0, bad = 0, simulation = true;
+const voltage = x => x * 3.3 / 4095;
+const u16 = (b, o) => b[o] | (b[o+1] << 8);
+const u32 = (b, o) => (b[o] | (b[o+1]<<8) | (b[o+2]<<16) | (b[o+3]<<24)) >>> 0;
+function fnv1a(bytes) {
+  let hash = 2166136261;
+  for (const byte of bytes) hash = Math.imul(hash ^ byte, 16777619) >>> 0;
+  return hash >>> 0;
+}
+function ingest(chunk) {
+  const merged = new Uint8Array(pending.length + chunk.length);
+  merged.set(pending); merged.set(chunk, pending.length); pending = merged;
+  let pos = 0;
+  while (pending.length - pos >= HEADER) {
+    if (!MAGIC.every((v,i) => pending[pos+i] === v)) {pos++; continue;}
+    const rate = u32(pending,pos+8), count = u16(pending,pos+12);
+    if (count === 0 || count > MAX_PAIRS || rate < 100 || rate > 1000000) {pos++; bad++; continue;}
+    const end = pos + HEADER + 4*count;
+    if (pending.length < end) break;
+    if (fnv1a(pending.subarray(pos+HEADER,end)) !== u32(pending,pos+16)) {pos++; bad++; continue;}
+    const seq = u32(pending,pos+4);
+    if (lastSequence !== null) lost += ((seq - lastSequence - 1) >>> 0);
+    lastSequence = seq; sampleRate = rate; simulation = !!(u16(pending,pos+14) & 1);
+    if (!paused) {
+      for (let i=pos+HEADER; i<end; i+=4) {ch1.push(u16(pending,i)); ch2.push(u16(pending,i+2));}
+      if (ch1.length > CAPACITY) {ch1.splice(0,ch1.length-CAPACITY); ch2.splice(0,ch2.length-CAPACITY);}
+    }
+    pos = end;
+  }
+  pending = pending.slice(pos);
+  if (pending.length > 4*MAX_PAIRS+HEADER) pending = pending.slice(-3);
+}
+function threshold() {return Number($("level").value) * 4095 / 100;}
+function visibleWindow() {
+  const n = Math.max(2,Math.round(sampleRate * Number($("timebase").value) * 10 / 1000));
+  let start = Math.max(0,ch1.length-n), trig = Number($("trigger").value);
+  if (trig >= 0 && ch1.length > n) {
+    const samples = trig === 0 ? ch1 : ch2, level = threshold(), pre = Math.floor(n*.12);
+    const first = Math.max(1,ch1.length - Math.floor(n*2));
+    const last = ch1.length - n + pre;
+    for (let i=last; i>=first; i--) {
+      if (samples[i-1] < level && samples[i] >= level) {start = Math.max(0,i-pre); break;}
+    }
+  }
+  return {start, n};
+}
+function measure(samples) {
+  const s = samples.slice(Math.max(0,samples.length - sampleRate));
+  if (s.length < 20) return "—";
+  const level = threshold(), edges = [];
+  let high = 0;
+  for (let i=0;i<s.length;i++) {
+    if (s[i]>=level) high++;
+    if (i && s[i-1]<level && s[i]>=level) edges.push(i);
+  }
+  if (edges.length<2) return "—";
+  const periods = edges.slice(1).map((v,i) => v-edges[i]);
+  const average = periods.reduce((a,b)=>a+b,0)/periods.length;
+  return `${(sampleRate/average).toFixed(1)} Hz · ${(100*high/s.length).toFixed(1)} %`;
+}
+function draw() {
+  const dpr = window.devicePixelRatio || 1, rect = canvas.getBoundingClientRect();
+  const w = Math.round(rect.width*dpr), h = Math.round(rect.height*dpr);
+  if (canvas.width !== w || canvas.height !== h) {canvas.width=w;canvas.height=h;}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=rect.width,H=rect.height, left=52,right=W-20,top=20,bottom=H-40, pw=right-left,ph=bottom-top;
+  ctx.fillStyle="#0b1624";ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="#27394c";ctx.lineWidth=1;ctx.beginPath();
+  for(let i=0;i<=10;i++){let x=left+pw*i/10;ctx.moveTo(x,top);ctx.lineTo(x,bottom);}
+  for(let i=0;i<=4;i++){let y=top+ph*i/4;ctx.moveTo(left,y);ctx.lineTo(right,y);}ctx.stroke();
+  ctx.fillStyle="#a9b8c9";ctx.font="12px system-ui";
+  for(let i=0;i<=4;i++)ctx.fillText(`${(3.3*(4-i)/4).toFixed(2)} V`,4,top+ph*i/4+4);
+  for(let i=0;i<=10;i++)ctx.fillText(`${i*Number($("timebase").value)}`,left+pw*i/10-4,H-15);
+  ctx.fillText("ms",right-10,H-15);
+  const {start,n}=visibleWindow();
+  const y = value => bottom-(value/4095)*ph;
+  function trace(samples,color) {
+    const end=Math.min(samples.length,start+n);if(end<=start)return;
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(left,y(samples[start]));
+    for(let i=start+1;i<end;i++){
+      const x=left+pw*(i-start)/(n-1);
+      ctx.lineTo(x,y(samples[i-1]));ctx.lineTo(x,y(samples[i]));
+    }ctx.stroke();
+  }
+  trace(ch1,"#ffd166");trace(ch2,"#51d5e8");
+  ctx.setLineDash([6,5]);ctx.strokeStyle="#e8edf3";ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(left,y(threshold()));ctx.lineTo(right,y(threshold()));ctx.stroke();ctx.setLineDash([]);
+  $("ch1info").textContent=`● CH1: ${measure(ch1)}`;
+  $("ch2info").textContent=`● CH2: ${measure(ch2)}`;
+  $("stats").textContent=`${sampleRate} muestras/s/canal · ${simulation ? "simulación" : "ADC"} · tramas perdidas: ${lost} · errores: ${bad}`;
+  requestAnimationFrame(draw);
+}
+async function connect() {
+  if (running) {await disconnect(); return;}
+  if (!("serial" in navigator)) {$("status").textContent="Web Serial no está disponible en este navegador";return;}
+  try {
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:921600, bufferSize:8192});
+    running=true; paused=false; pending=new Uint8Array(0);ch1=[];ch2=[];lastSequence=null;lost=0;bad=0;
+    $("connect").textContent="Desconectar";$("pause").disabled=false;$("pause").textContent="Pausar";
+    $("status").textContent="Conectado · esperando tramas";
+    reader=port.readable.getReader();
+    while(running){const {value,done}=await reader.read();if(done)break;if(value) {ingest(value);$("status").textContent="Recibiendo";}}
+  } catch(e) {$("status").textContent=`Error: ${e.message}`;}
+  finally {
+    running=false;
+    if(reader){reader.releaseLock();reader=null;}
+    if(port){try{await port.close();}catch(_e){}port=null;}
+    $("connect").textContent="Conectar puerto serie";$("pause").disabled=true;
+    if($("status").textContent==="Recibiendo")$("status").textContent="Desconectado";
+  }
+}
+async function disconnect(){running=false;if(reader)await reader.cancel();}
+$("connect").addEventListener("click",connect);
+$("pause").addEventListener("click",()=>{paused=!paused;$("pause").textContent=paused?"Reanudar":"Pausar";});
+$("level").addEventListener("input",()=>{$("levelText").textContent=`${(3.3*Number($("level").value)/100).toFixed(2)} V`;});
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
